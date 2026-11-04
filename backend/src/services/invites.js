@@ -18,5 +18,5 @@ export async function issueInvite(userDoc, orgName, { send = true } = {}) {
   if (!send) return { link, emailSent: false, emailError: null };
   const t = templates.invite({ name: userDoc.name, orgName: orgName || "Beno Digital Card", role: userDoc.role, link });
   const mail = await sendEmail({ to: userDoc.email, ...t });
-  return { link, emailSent: mail.sent, emailError: mail.sent ? null : mail.reason };
+  return { link, emailSent: mail.sent, emailError: mail.sent ? null : mail.code };
 }

@@ -228,12 +228,18 @@ export function CopyField({ value, label = "Copy", mono = true, className }: { v
 
 /** Shown after inviting someone: whether the email went out, plus the link to share manually. */
 export function InviteResult({ invite, email }: { invite: { link: string; emailSent: boolean; emailError: string | null }; email: string }) {
+  const emailMessage = {
+    not_configured: `Email sending is not set up yet. Copy the link below and send it to ${email} yourself.`,
+    testing_mode: `Email is in testing mode, so it was not sent to ${email}. Copy the link below and share it on WhatsApp or email.`,
+    invalid_from: `The sender email domain is not verified yet. Copy the link below and share it with ${email}.`,
+    send_failed: `The email could not be sent right now. Copy the link below and share it with ${email}.`,
+  }[invite.emailError || "send_failed"];
   return (
     <div className="flex flex-col gap-2">
       {invite.emailSent ? (
         <p className="text-sm text-ok">Invite email sent to {email}.</p>
       ) : (
-        <p className="text-sm text-warn">The invite email was not sent ({invite.emailError === "not_configured" ? "email is not configured on the server" : invite.emailError}). Share this link with {email} yourself. It is valid for 7 days.</p>
+        <p className="text-sm text-warn">{emailMessage} The link works for 7 days.</p>
       )}
       <CopyField value={invite.link} />
     </div>

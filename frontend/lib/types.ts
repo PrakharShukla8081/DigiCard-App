@@ -87,4 +87,4 @@ export type Plan = {
   organizations?: number;
 };
 
-export type Invite = { link: string; emailSent: boolean; emailError: string | null };
+export type Invite = { link: string; emailSent: boolean; emailError: "not_configured" | "testing_mode" | "invalid_from" | "send_failed" | null };

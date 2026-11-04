@@ -3,6 +3,13 @@ import { logger } from "../common/logger.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
+function classifyEmailError(reason) {
+  const text = String(reason || "").toLowerCase();
+  if (text.includes("only send testing emails") || text.includes("testing email") || text.includes("verify a domain")) return "testing_mode";
+  if (text.includes("from") && (text.includes("verify") || text.includes("domain"))) return "invalid_from";
+  return "send_failed";
+}
+
 /**
  * Send an email through Resend's HTTP API.
  * Without RESEND_API_KEY the email is printed to the server console (development mode)
@@ -11,7 +18,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 export async function sendEmail({ to, subject, html, text }) {
   if (!env.resendApiKey) {
     if (!env.isTest) logger.info(`[email:not-sent] to=${to} subject="${subject}"\n${text || ""}`);
-    return { sent: false, reason: "not_configured" };
+    return { sent: false, reason: "not_configured", code: "not_configured" };
   }
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -20,10 +27,17 @@ export async function sendEmail({ to, subject, html, text }) {
       body: JSON.stringify({ from: env.emailFrom, to: [to], subject, html, text }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { sent: false, reason: data?.message || `HTTP ${res.status}` };
+    if (!res.ok) {
+      const reason = data?.message || `HTTP ${res.status}`;
+      const code = classifyEmailError(reason);
+      logger.warn(`[email:send-failed] code=${code} reason=${reason}`);
+      return { sent: false, reason, code };
+    }
     return { sent: true, id: data.id };
   } catch (e) {
-    return { sent: false, reason: e.message };
+    const reason = e.message;
+    logger.warn(`[email:send-failed] code=send_failed reason=${reason}`);
+    return { sent: false, reason, code: "send_failed" };
   }
 }
 
