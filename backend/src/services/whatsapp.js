@@ -11,7 +11,7 @@ import { decrypt } from "../common/crypto.js";
 import { Organization } from "../models/index.js";
 
 export async function whatsappConfig(orgId) {
-  const org = await Organization.findById(orgId).select("+whatsapp.accessTokenEnc whatsapp").lean();
+  const org = await Organization.findById(orgId).select("+whatsapp.accessTokenEnc").lean();
   const w = org?.whatsapp || {};
   if (w.useOwn && w.accessTokenEnc && w.phoneNumberId && w.templateName) {
     try {

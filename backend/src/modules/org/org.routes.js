@@ -198,7 +198,7 @@ router.get("/enquiries/export.csv", async (req, res) => {
 /* ═════════════ Reminders ═════════════ */
 router.get("/reminders", async (req, res) => {
   const { org, ent } = req.tenant;
-  const fresh = await Organization.findById(org._id).select("+whatsapp.accessTokenEnc reminders whatsapp").lean();
+  const fresh = await Organization.findById(org._id).select("+whatsapp.accessTokenEnc reminders").lean();
   const [preview, logs, waCfg] = await Promise.all([reminderPreview(org, ent), NotificationLog.find({ organizationId: org._id }).sort({ createdAt: -1 }).limit(50).lean(), whatsappConfig(org._id)]);
   const emps = await Employee.find({ organizationId: org._id, _id: { $in: logs.map((l) => l.employeeId).filter(Boolean) } }).select("firstName lastName").lean();
   const em = Object.fromEntries(emps.map((e) => [String(e._id), fullName(e)]));
