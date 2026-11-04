@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import type { Plan } from "@/lib/types";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Button } from "@/components/ui/button";
 
 export type SubForm = {
   planId: string;
@@ -58,6 +59,8 @@ export function subBody(f: SubForm, includePlan = true) {
 
 export function SubscriptionFields({ value, onChange, plans, features, lockPlan = false }: { value: SubForm; onChange: (v: SubForm) => void; plans: Plan[]; features: Record<string, string>; lockPlan?: boolean }) {
   const plan = useMemo(() => plans.find((p) => p._id === value.planId), [plans, value.planId]);
+  const planLimit = plan?.employeeLimit ?? null;
+  const customLimit = value.employeeLimitOverride ? Number(value.employeeLimitOverride) : null;
   const set = (patch: Partial<SubForm>) => onChange({ ...value, ...patch });
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -88,8 +91,16 @@ export function SubscriptionFields({ value, onChange, plans, features, lockPlan 
           ))}
         </Select>
       </Field>
-      <Field label="Employee limit override" htmlFor="sub-limit" hint="Leave empty to use the plan limit">
-        <Input id="sub-limit" type="number" min={1} value={value.employeeLimitOverride} onChange={(e) => set({ employeeLimitOverride: e.target.value })} placeholder={plan?.employeeLimit ? String(plan.employeeLimit) : "Unlimited"} />
+      <Field
+        label="Custom employee limit (optional)"
+        htmlFor="sub-limit"
+        hint={`Leave empty to use the plan limit (${planLimit == null ? "unlimited" : `${planLimit.toLocaleString("en-IN")} employees`})`}
+      >
+        <div className="flex items-center gap-2">
+          <Input id="sub-limit" type="number" min={1} value={value.employeeLimitOverride} onChange={(e) => set({ employeeLimitOverride: e.target.value })} placeholder={planLimit == null ? "Unlimited" : String(planLimit)} />
+          {value.employeeLimitOverride && <Button type="button" size="sm" variant="ghost" onClick={() => set({ employeeLimitOverride: "" })}>Use plan limit</Button>}
+        </div>
+        {planLimit != null && customLimit != null && customLimit < planLimit && <p className="mt-1 text-[12px] text-warn">This company will get only {customLimit} seats instead of the plan&apos;s {planLimit}.</p>}
       </Field>
       <Field label="Start date" htmlFor="sub-start">
         <Input id="sub-start" type="date" value={value.startDate} onChange={(e) => set({ startDate: e.target.value, endDate: plan ? addDays(e.target.value, plan.durationDays) : value.endDate })} />

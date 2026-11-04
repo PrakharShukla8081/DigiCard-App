@@ -114,6 +114,9 @@ export default function OrganizationDetail() {
   }
 
   const limit = current ? current.employeeLimitOverride ?? current.plan?.employeeLimit : null;
+  const planLimit = current?.plan?.employeeLimit ?? null;
+  const hasCustomLimit = current?.employeeLimitOverride != null;
+  const limitLabel = limit == null ? "Unlimited seats" : `${fmtNum(limit)} seat${limit === 1 ? "" : "s"}${hasCustomLimit ? ` (custom limit · plan allows ${planLimit == null ? "unlimited" : fmtNum(planLimit)})` : " (from plan)"}`;
 
   return (
     <>
@@ -141,7 +144,7 @@ export default function OrganizationDetail() {
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Employees" value={fmtNum(usage.employees)} hint={limit ? `of ${fmtNum(limit)} seats` : "Unlimited seats"} tone={limit && usage.employees >= limit ? "warn" : undefined} />
+        <Stat label="Employees" value={fmtNum(usage.employees)} hint={<span className="inline-flex flex-wrap items-center gap-1">{limitLabel}{hasCustomLimit && <Chip tone="warn">Custom limit</Chip>}</span>} tone={limit && usage.employees >= limit ? "warn" : undefined} />
         <Stat label="Published cards" value={fmtNum(usage.publishedCards)} hint={`${fmtNum(usage.activeCards)} active`} />
         <Stat label="Views · 30 days" value={fmtNum(usage.last30Days.views)} hint={`${fmtNum(usage.last30Days.saves)} contact saves`} />
         <Stat label="Enquiries · 30 days" value={fmtNum(usage.last30Days.enquiries)} hint={`${fmtNum(usage.last30Days.shares)} shares`} />
@@ -175,6 +178,11 @@ export default function OrganizationDetail() {
                   <div className="eyebrow">Status</div>
                   <div className="mt-1.5">
                     <SubStatusChip status={current.effectiveStatus} />
+                  </div>
+                  <div>
+                    <div className="eyebrow">Seats</div>
+                    <div className="mt-1 font-semibold">{limitLabel}</div>
+                    {hasCustomLimit && <Chip tone="warn">Custom limit</Chip>}
                   </div>
                 </div>
                 <div>
