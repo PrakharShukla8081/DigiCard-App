@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Pencil, Plus, Power, RefreshCw, UserPlus } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, Power, RefreshCw, Trash2, UserPlus } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { useLoad } from "@/lib/hooks";
 import { fmtDate, fmtNum, daysLeft } from "@/lib/utils";
@@ -55,6 +55,7 @@ export default function OrganizationDetail() {
   const [newAdmin, setNewAdmin] = useState({ name: "", email: "" });
   const [invite, setInvite] = useState<{ invite: Invite; email: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editingAdmin, setEditingAdmin] = useState<{ _id: string; name: string; email: string } | null>(null);
 
   if (loading && !data) return <PageLoader />;
   if (error) return <ErrorBox message={error} onRetry={reload} />;
@@ -224,7 +225,7 @@ export default function OrganizationDetail() {
             <PanelHeader
               title="Company admins"
               actions={
-                <Button size="sm" onClick={() => (setNewAdmin({ name: "", email: "" }), setInvite(null), setAdminDialog(true))}>
+                <Button size="sm" onClick={() => (setEditingAdmin(null), setNewAdmin({ name: "", email: "" }), setInvite(null), setAdminDialog(true))}>
                   <UserPlus /> Invite admin
                 </Button>
               }
@@ -239,10 +240,8 @@ export default function OrganizationDetail() {
                   <div className="flex items-center gap-2">
                     {a.status === "active" ? <Chip tone="ok">Active</Chip> : a.status === "invited" ? <Chip tone="warn">Invited</Chip> : <Chip tone="bad">Disabled</Chip>}
                     {a.status === "invited" && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={async () => {
+                      <>
+                        <Button size="sm" variant="ghost" onClick={async () => {
                           try {
                             const r = await api.post<{ invite: Invite }>(`/platform/users/${a._id}/resend-invite`);
                             setInvite({ invite: r.data.invite, email: a.email });
@@ -250,10 +249,13 @@ export default function OrganizationDetail() {
                           } catch (e) {
                             toast.error(errMsg(e));
                           }
-                        }}
-                      >
-                        <RefreshCw /> Resend
-                      </Button>
+                        }}><RefreshCw /> Resend</Button>
+                        <Button size="sm" variant="ghost" onClick={() => (setEditingAdmin(a), setNewAdmin({ name: a.name, email: a.email }), setInvite(null), setAdminDialog(true))}><Pencil /> Edit</Button>
+                        <Button size="sm" variant="ghost" onClick={async () => {
+                          if (!(await confirm({ title: `Remove ${a.name}?`, body: "This deletes the unused invite. Active admins cannot be deleted.", confirmLabel: "Remove", danger: true }))) return;
+                          await run(() => api.del(`/platform/users/${a._id}`), "Invited admin removed");
+                        }}><Trash2 /> Remove</Button>
+                      </>
                     )}
                     {a.status !== "invited" && (
                       <Button size="sm" variant="ghost" onClick={() => run(() => api.patch(`/platform/users/${a._id}/status`, { status: a.status === "active" ? "disabled" : "active" }), a.status === "active" ? "Admin disabled" : "Admin enabled")}>
@@ -365,7 +367,7 @@ export default function OrganizationDetail() {
       <Dialog
         open={adminDialog}
         onOpenChange={setAdminDialog}
-        title={invite ? "Invite link" : "Invite a company admin"}
+        title={invite ? "Invite link" : editingAdmin ? "Edit invited admin" : "Invite a company admin"}
         footer={
           invite ? (
             <Button variant="primary" onClick={() => setAdminDialog(false)}>
@@ -380,8 +382,14 @@ export default function OrganizationDetail() {
                 onClick={async () => {
                   setBusy(true);
                   try {
-                    const r = await api.post<{ invite: Invite }>(`/platform/organizations/${id}/admins`, newAdmin);
-                    setInvite({ invite: r.data.invite, email: newAdmin.email });
+                    if (editingAdmin) {
+                      const r = await api.patch<{ user: { _id: string }; invite: Invite | null }>(`/platform/users/${editingAdmin._id}`, newAdmin);
+                      if (r.invite) setInvite({ invite: r.invite, email: newAdmin.email });
+                      else setAdminDialog(false);
+                    } else {
+                      const r = await api.post<{ invite: Invite }>(`/platform/organizations/${id}/admins`, newAdmin);
+                      setInvite({ invite: r.data.invite, email: newAdmin.email });
+                    }
                     reload();
                   } catch (e) {
                     toast.error(errMsg(e));
@@ -390,7 +398,7 @@ export default function OrganizationDetail() {
                   }
                 }}
               >
-                Send invite
+                {editingAdmin ? "Save changes" : "Send invite"}
               </Button>
             </>
           )

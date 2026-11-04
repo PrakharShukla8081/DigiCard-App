@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { RefreshCw, UserPlus } from "lucide-react";
+import { Pencil, RefreshCw, Trash2, UserPlus } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLoad } from "@/lib/hooks";
@@ -10,17 +10,19 @@ import { timeAgo } from "@/lib/utils";
 import type { Invite } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
-import { Avatar, Chip, Dialog, ErrorBox, InviteResult, PageHeader, PageLoader, Panel } from "@/components/ui/misc";
+import { Avatar, Chip, Dialog, ErrorBox, InviteResult, PageHeader, PageLoader, Panel, useConfirm } from "@/components/ui/misc";
 
 type U = { _id: string; name: string; email: string; status: string; lastLoginAt: string | null; invitedAt: string | null };
 
 export default function TeamPage() {
   const { session } = useAuth();
+  const confirm = useConfirm();
   const { data, error, loading, reload } = useLoad(() => api.get<U[]>("/org/team"));
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "" });
   const [invite, setInvite] = useState<{ invite: Invite; email: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<U | null>(null);
 
   if (loading && !data) return <PageLoader />;
   if (error) return <ErrorBox message={error} onRetry={reload} />;
@@ -32,7 +34,7 @@ export default function TeamPage() {
         title="Admin team"
         sub="People who can manage employees, branding and analytics for your company."
         actions={
-          <Button variant="primary" onClick={() => (setForm({ name: "", email: "" }), setInvite(null), setOpen(true))}>
+          <Button variant="primary" onClick={() => (setForm({ name: "", email: "" }), setEditing(null), setInvite(null), setOpen(true))}>
             <UserPlus /> Invite admin
           </Button>
         }
@@ -70,6 +72,29 @@ export default function TeamPage() {
                   <RefreshCw /> Resend
                 </Button>
               )}
+              {u.status === "invited" && (
+                <>
+                  <Button size="sm" variant="ghost" onClick={() => (setEditing(u), setForm({ name: u.name, email: u.email }), setInvite(null), setOpen(true))}>
+                    <Pencil /> Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={async () => {
+                      if (!(await confirm({ title: `Remove ${u.name}?`, body: "This deletes the unused invite. Active admins cannot be deleted.", confirmLabel: "Remove", danger: true }))) return;
+                      try {
+                        await api.del(`/org/team/${u._id}`);
+                        toast.success("Invited admin removed");
+                        reload();
+                      } catch (e) {
+                        toast.error(errMsg(e));
+                      }
+                    }}
+                  >
+                    <Trash2 /> Remove
+                  </Button>
+                </>
+              )}
               {u._id !== session?.user.id && u.status !== "invited" && (
                 <Button
                   size="sm"
@@ -93,7 +118,7 @@ export default function TeamPage() {
       <Dialog
         open={open}
         onOpenChange={setOpen}
-        title={invite ? "Invite link" : "Invite an admin"}
+        title={invite ? "Invite link" : editing ? "Edit invited admin" : "Invite an admin"}
         footer={
           invite ? (
             <Button variant="primary" onClick={() => setOpen(false)}>
@@ -108,8 +133,14 @@ export default function TeamPage() {
                 onClick={async () => {
                   setBusy(true);
                   try {
-                    const r = await api.post<{ invite: Invite }>("/org/team", form);
-                    setInvite({ invite: r.data.invite, email: form.email });
+                    if (editing) {
+                      const r = await api.patch<{ user: U; invite: Invite | null }>(`/org/team/${editing._id}`, form);
+                      if (r.invite) setInvite({ invite: r.invite, email: form.email });
+                      else setOpen(false);
+                    } else {
+                      const r = await api.post<{ invite: Invite }>("/org/team", form);
+                      setInvite({ invite: r.data.invite, email: form.email });
+                    }
                     reload();
                   } catch (e) {
                     toast.error(errMsg(e));

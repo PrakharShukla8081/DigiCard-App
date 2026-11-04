@@ -63,6 +63,7 @@ const tokenFromLink = (link) => decodeURIComponent(link.split("token=")[1]);
 const sa = client();
 const adminA = client();
 const adminB = client();
+const inviteClient = client();
 const anon = client();
 let planAll;
 let planSmall;
@@ -126,6 +127,36 @@ test("company admin cannot reach platform APIs", async () => {
   assert.equal(r.status, 403);
   const r2 = await anon.get("/api/org/employees");
   assert.equal(r2.status, 401);
+});
+
+test("invited admins can be edited or removed with scoped invite rotation", async () => {
+  let r = await sa.post(`/api/platform/organizations/${orgA._id}/admins`, { name: "Typo Admin", email: "typo@abc.test" });
+  assert.equal(r.status, 201, r.message);
+  const managedId = r.data.admin._id;
+  const oldToken = tokenFromLink(r.data.invite.link);
+  r = await sa.patch(`/api/platform/users/${managedId}`, { name: "Correct Admin", email: "correct@abc.test" });
+  assert.equal(r.status, 200, r.message);
+  assert.equal(r.data.user.email, "correct@abc.test");
+  assert.ok(r.data.invite.link);
+  assert.equal((await inviteClient.post("/api/auth/accept-invite", { token: oldToken, password: "AdminPass3" })).status, 400);
+  r = await inviteClient.post("/api/auth/accept-invite", { token: tokenFromLink(r.data.invite.link), password: "AdminPass3" });
+  assert.equal(r.status, 200, r.message);
+  assert.equal((await sa.patch(`/api/platform/users/${managedId}`, { email: "another@abc.test" })).status, 400);
+  assert.equal((await sa.del(`/api/platform/users/${managedId}`)).status, 400);
+
+  r = await sa.post(`/api/platform/organizations/${orgA._id}/admins`, { name: "Delete Me", email: "delete-me@abc.test" });
+  assert.equal(r.status, 201, r.message);
+  const deleteId = r.data.admin._id;
+  assert.equal((await sa.del(`/api/platform/users/${deleteId}`)).status, 200);
+  assert.equal(await M.User.findById(deleteId).lean(), null);
+
+  r = await adminA.post("/api/org/team", { name: "Team Invite", email: "team-invite@abc.test" });
+  assert.equal(r.status, 201, r.message);
+  const teamId = r.data.user._id;
+  assert.equal((await adminB.patch(`/api/org/team/${teamId}`, { name: "Cross Tenant" })).status, 404);
+  assert.equal((await adminB.del(`/api/org/team/${teamId}`)).status, 404);
+  assert.equal((await adminA.patch(`/api/org/team/${teamId}`, { name: "Updated Team Invite", email: "team-updated@abc.test" })).status, 200);
+  assert.equal((await adminA.del(`/api/org/team/${teamId}`)).status, 200);
 });
 
 test("employees are isolated between companies", async () => {

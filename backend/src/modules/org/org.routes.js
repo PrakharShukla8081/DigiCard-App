@@ -268,6 +268,36 @@ router.post("/team/:id/resend-invite", async (req, res) => {
   res.json({ success: true, data: { invite } });
 });
 
+router.patch("/team/:id", async (req, res) => {
+  assertId(req.params.id);
+  const b = parse(z.object({ name: z.string().trim().min(2).max(120).optional(), email: emailSchema.optional() }).refine((v) => v.name !== undefined || v.email !== undefined, "Provide a name or email to update."), req.body);
+  const u = await User.findOne({ _id: req.params.id, organizationId: req.tenant.organizationId, role: ROLES.COMPANY_ADMIN });
+  if (!u) throw notFound("User not found.");
+  const emailChanged = b.email !== undefined && b.email !== u.email;
+  if (emailChanged) {
+    if (u.status !== "invited") throw badRequest("Email can only be changed before the invite is accepted.");
+    if (await User.exists({ email: b.email, _id: { $ne: u._id } })) throw conflict("A user with this email already exists.");
+    u.email = b.email;
+  }
+  if (b.name !== undefined) u.name = b.name;
+  await u.save();
+  const invite = emailChanged ? await issueInvite(u, req.tenant.org.name) : null;
+  audit(req, { action: "team.admin_updated", entity: "User", entityId: u._id, summary: u.email });
+  res.json({ success: true, data: { user: { _id: u._id, name: u.name, email: u.email, status: u.status }, invite } });
+});
+
+router.delete("/team/:id", async (req, res) => {
+  assertId(req.params.id);
+  const u = await User.findOne({ _id: req.params.id, organizationId: req.tenant.organizationId, role: ROLES.COMPANY_ADMIN });
+  if (!u) throw notFound("User not found.");
+  if (String(u._id) === String(req.auth.userId)) throw badRequest("You cannot delete yourself.");
+  if (u.status !== "invited") throw badRequest("Only invited admins can be deleted. Disable active admins instead.");
+  await RefreshToken.deleteMany({ userId: u._id });
+  await User.deleteOne({ _id: u._id });
+  audit(req, { action: "team.admin_deleted", entity: "User", entityId: u._id, summary: u.email });
+  res.json({ success: true, message: "Invited admin removed." });
+});
+
 router.patch("/team/:id/status", async (req, res) => {
   assertId(req.params.id);
   const { status } = parse(z.object({ status: z.enum(["active", "disabled"]) }), req.body);

@@ -395,6 +395,33 @@ async function loadManagedUser(id) {
   return user;
 }
 
+router.patch("/users/:id", async (req, res) => {
+  const user = await loadManagedUser(req.params.id);
+  const b = parse(z.object({ name: z.string().trim().min(2).max(120).optional(), email: emailSchema.optional() }).refine((v) => v.name !== undefined || v.email !== undefined, "Provide a name or email to update."), req.body);
+  const emailChanged = b.email !== undefined && b.email !== user.email;
+  if (b.email && b.email !== user.email) {
+    if (user.status !== "invited") throw badRequest("Email can only be changed before the invite is accepted.");
+    if (await User.exists({ email: b.email, _id: { $ne: user._id } })) throw conflict("A user with this email already exists.");
+    user.email = b.email;
+  }
+  if (b.name !== undefined) user.name = b.name;
+  await user.save();
+  const org = user.organizationId ? await Organization.findById(user.organizationId).select("name").lean() : null;
+  const invite = emailChanged ? await issueInvite(user, org?.name) : null;
+  audit(req, { action: "admin.updated", entity: "User", entityId: user._id, summary: user.email, organizationId: user.organizationId });
+  res.json({ success: true, data: { user: { _id: user._id, name: user.name, email: user.email, status: user.status }, invite } });
+});
+
+router.delete("/users/:id", async (req, res) => {
+  const user = await loadManagedUser(req.params.id);
+  if (String(user._id) === String(req.auth.userId)) throw badRequest("You cannot delete yourself.");
+  if (user.status !== "invited") throw badRequest("Only invited admins can be deleted. Disable active admins instead.");
+  await RefreshToken.deleteMany({ userId: user._id });
+  await User.deleteOne({ _id: user._id });
+  audit(req, { action: "admin.deleted", entity: "User", entityId: user._id, summary: user.email, organizationId: user.organizationId });
+  res.json({ success: true, message: "Invited admin removed." });
+});
+
 router.post("/users/:id/resend-invite", async (req, res) => {
   const user = await loadManagedUser(req.params.id);
   if (user.status === "active") throw badRequest("This user has already set up their account.");
