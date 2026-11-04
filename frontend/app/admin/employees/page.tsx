@@ -51,7 +51,13 @@ export default function EmployeesPage() {
   const rows = data?.data || [];
   const allOnPage = rows.length > 0 && rows.every((r) => sel.has(r._id));
   const toggleAll = () => setSel((s) => (allOnPage ? new Set([...s].filter((id) => !rows.some((r) => r._id === id))) : new Set([...s, ...rows.map((r) => r._id)])));
-  const toggle = (id: string) => setSel((s) => (s.has(id) ? (s.delete(id), new Set(s)) : new Set(s.add(id))));
+  const toggle = (id: string) =>
+    setSel((s) => {
+      const next = new Set(s); // never mutate the previous state
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   async function bulk(action: string) {
     const n = sel.size;

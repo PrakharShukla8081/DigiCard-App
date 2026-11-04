@@ -10,6 +10,7 @@
  * runImport() to a queue worker (e.g. BullMQ) — the function is self-contained.
  */
 import ExcelJS from "exceljs";
+import { Readable } from "node:stream";
 import { parse as parseCsv } from "csv-parse/sync";
 import { Employee, ImportJob } from "../models/index.js";
 import { isValidPhone, normalizePhone } from "../common/validate.js";
@@ -76,16 +77,37 @@ export async function parseSheet(buffer, fileName) {
   let headers = [];
   let rows = [];
   if (/\.xlsx$/i.test(fileName)) {
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer);
-    const ws = wb.worksheets.find((w) => w.rowCount > 0) || wb.worksheets[0];
-    if (!ws) throw new Error("The Excel file has no sheets.");
-    ws.eachRow({ includeEmpty: false }, (row, n) => {
-      const vals = [];
-      row.eachCell({ includeEmpty: true }, (cell, col) => (vals[col - 1] = cellToString(cell.value).trim()));
-      if (!headers.length) headers = vals.map(normHeader);
-      else rows.push({ rowNumber: n, cells: vals });
+    // Streaming reader: lower memory for big files, and it ignores cell comments/notes,
+    // drawings and styles (the full loader crashes on some files that contain comments).
+    const reader = new ExcelJS.stream.xlsx.WorkbookReader(Readable.from(buffer), {
+      worksheets: "emit",
+      sharedStrings: "cache",
+      hyperlinks: "cache",
+      styles: "ignore",
+      entries: "emit",
     });
+    for await (const ws of reader) {
+      const sheetRows = [];
+      let sheetHeaders = [];
+      for await (const row of ws) {
+        const vals = [];
+        row.eachCell({ includeEmpty: true }, (cell, col) => (vals[col - 1] = cellToString(cell.value).trim()));
+        if (!vals.some((v) => v)) continue;
+        if (!sheetHeaders.length) sheetHeaders = vals.map(normHeader);
+        else sheetRows.push({ rowNumber: row.number, cells: vals });
+      }
+      if (!sheetHeaders.length) continue;
+      if (sheetHeaders.some((h) => HEADER_MAP[h] === "employeeCode")) {
+        headers = sheetHeaders; // first sheet that has an "Employee ID" column wins
+        rows = sheetRows;
+        break;
+      }
+      if (!headers.length) {
+        headers = sheetHeaders; // fallback: first sheet with data (gives a clear "column not found" error)
+        rows = sheetRows;
+      }
+    }
+    if (!headers.length) throw new Error("The Excel file has no data. Put the employees on the first sheet with a header row.");
   } else {
     const text = buffer.toString("utf8");
     const records = parseCsv(text, { bom: true, skip_empty_lines: true, relax_column_count: true, trim: true });
