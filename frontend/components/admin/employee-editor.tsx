@@ -180,7 +180,7 @@ export function EmployeeEditor({ employee, base, onSaved }: { employee?: Employe
   const loginOn = hasFeature("employeeLogin");
 
   return (
-    <form onSubmit={save}>
+    <div>
       <Link href="/admin/employees" className="mb-3 inline-flex items-center gap-1 text-[13px] font-semibold text-muted hover:text-fg">
         <ArrowLeft className="size-4" /> Employees
       </Link>
@@ -201,14 +201,14 @@ export function EmployeeEditor({ employee, base, onSaved }: { employee?: Employe
                 ]}
               />
             </div>
-            <Button type="submit" variant="primary" loading={busy}>
+            <Button type="submit" form="employee-editor-form" variant="primary" loading={busy}>
               {isNew ? "Create card" : "Save changes"}
             </Button>
           </>
         }
       />
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
-        <div className={pane === "preview" ? "max-lg:hidden" : ""}>
+        <form id="employee-editor-form" onSubmit={save} className={pane === "preview" ? "max-lg:hidden" : ""}>
           <Panel>
             <section className="border-b border-line px-5 py-5">
               <h2 className="mb-4 text-base font-bold">Profile</h2>
@@ -340,7 +340,7 @@ export function EmployeeEditor({ employee, base, onSaved }: { employee?: Employe
               </div>
             </Panel>
           )}
-        </div>
+        </form>
 
         <aside className={`flex flex-col gap-4 lg:sticky lg:top-20 ${pane === "edit" ? "max-lg:hidden" : ""}`}>
           <div className="flex items-center justify-between">
@@ -387,7 +387,7 @@ export function EmployeeEditor({ employee, base, onSaved }: { employee?: Employe
       <Dialog open={Boolean(invite)} onOpenChange={(o) => !o && setInvite(null)} title="Login invite" footer={<Button variant="primary" onClick={() => setInvite(null)}>Done</Button>}>
         {invite && <InviteResult invite={invite} email={employee?.workEmail || ""} />}
       </Dialog>
-    </form>
+    </div>
   );
 }
 
