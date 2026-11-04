@@ -52,7 +52,9 @@ Generate random secrets with:
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
-Create the first Super Admin (and, optionally, example plans and a demo company):
+On a new database, the first Super Admin is created automatically at API startup from
+`SEED_SUPERADMIN_EMAIL` and `SEED_SUPERADMIN_PASSWORD`. The same variables can also be
+used to create the account explicitly (and, optionally, example plans and a demo company):
 
 ```bash
 npm run seed                      # Super Admin only
@@ -180,6 +182,7 @@ A common setup:
 Checklist:
 
 - `NODE_ENV=production` on the backend (secure cookies need **HTTPS**).
+- On a new database the first Super Admin is created automatically at startup from `SEED_SUPERADMIN_EMAIL` and `SEED_SUPERADMIN_PASSWORD`.
 - `FRONTEND_URL` and `PUBLIC_CARD_BASE_URL` = your real HTTPS domain; `BACKEND_URL` in the frontend points to the API.
 - The browser only talks to the frontend domain; `/api/*` and `/uploads/*` are proxied by Next.js (see `frontend/next.config.mjs`). Do not expose the API publicly with `TRUST_PROXY` higher than the real number of proxies.
 - Run **one** backend instance with `JOBS_ENABLED=true` (others `false`) if you scale out. The in-memory rate limiter and import jobs are per-process; move them to Redis/BullMQ when you run several API instances.

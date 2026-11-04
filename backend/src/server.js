@@ -4,10 +4,12 @@ import { createApp } from "./app.js";
 import { logger } from "./common/logger.js";
 import { ImportJob } from "./models/index.js";
 import { startScheduler } from "./jobs/scheduler.js";
+import { ensureSuperAdmin } from "./services/bootstrap.js";
 
 async function main() {
   assertEnv();
   await connectDB();
+  await ensureSuperAdmin();
 
   // Imports run inside this process; anything still "processing" after a restart can never finish.
   await ImportJob.updateMany(
