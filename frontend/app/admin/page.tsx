@@ -83,13 +83,13 @@ export default function AdminDashboard() {
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-        <Panel>
+        <Panel className="min-w-0">
           <PanelHeader title="Engagement · last 30 days" actions={<Legend series={SERIES} />} />
           <div className="px-3 pb-3">
             <TrendChart data={d.last30.series} series={SERIES} />
           </div>
         </Panel>
-        <Panel>
+        <Panel className="min-w-0">
           <PanelHeader title="Card adoption" />
           <div className="flex flex-col gap-4 px-5 pb-5">
             {[
@@ -120,7 +120,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Panel>
+        <Panel className="min-w-0">
           <PanelHeader title="Latest enquiries" actions={<Link href="/admin/enquiries" className="text-[13px] font-semibold text-accent hover:underline">View all</Link>} />
           <div className="px-5 pb-4">
             {d.recentEnquiries.length === 0 && <p className="py-6 text-center text-[13px] text-muted">No enquiries yet. They appear when visitors use the form on a card.</p>}
@@ -136,7 +136,7 @@ export default function AdminDashboard() {
             ))}
           </div>
         </Panel>
-        <Panel>
+        <Panel className="min-w-0">
           <PanelHeader title="Recent activity" actions={<Link href="/admin/audit" className="text-[13px] font-semibold text-accent hover:underline">Audit log</Link>} />
           <div className="px-5 pb-4">
             {d.recentActivity.length === 0 && <p className="py-6 text-center text-[13px] text-muted">No activity yet.</p>}
