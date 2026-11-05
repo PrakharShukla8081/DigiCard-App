@@ -28,6 +28,7 @@ const SERIES = [
 
 export default function PlatformDashboard() {
   const { data: d, error, loading, reload } = useLoad(() => api.get<Dash>("/platform/dashboard"));
+  const { data: leadData } = useLoad(() => api.getFull<{ meta: { newCount: number } }>("/platform/leads?status=new&limit=5"));
   if (loading && !d) return <PageLoader />;
   if (error) return <ErrorBox message={error} onRetry={reload} />;
   if (!d) return null;
@@ -59,6 +60,10 @@ export default function PlatformDashboard() {
           </Panel>
         ))}
       </div>
+      <Panel className="mt-4 flex flex-wrap items-center justify-between gap-3 p-4">
+        <div><div className="font-bold">New website leads: {leadData?.meta?.newCount ?? "—"}</div><p className="text-sm text-muted">Demo, trial and pricing requests from the public site.</p></div>
+        <Button asChild variant="outline"><Link href="/platform/leads">View website leads</Link></Button>
+      </Panel>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
         <Panel>
