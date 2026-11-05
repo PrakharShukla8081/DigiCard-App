@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Logo } from "@/components/shell/logo";
 import { Button } from "@/components/ui/button";
 
@@ -15,7 +15,10 @@ const LINKS = [
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
-  const [session] = useState(() => typeof document !== "undefined" && document.cookie.includes("bdc_session="));
+  const [session, setSession] = useState(false);
+  useEffect(() => {
+    setSession(document.cookie.includes("bdc_session="));
+  }, []);
   const dashboardLabel = session ? "Open dashboard" : "Log in";
   const dashboardHref = session ? "/platform" : "/login";
 
