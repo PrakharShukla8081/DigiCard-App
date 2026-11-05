@@ -10,6 +10,7 @@ import {
   EVENT_SOURCES,
   ROLES,
 } from "../common/constants.js";
+export { Testimonial } from "./testimonial.js";
 
 const { Schema, model, Types } = mongoose;
 const ObjectId = Schema.Types.ObjectId;
@@ -24,13 +25,43 @@ const planSchema = new Schema(
     code: { type: String, required: true, trim: true, lowercase: true, unique: true, maxlength: 40 },
     description: { type: String, trim: true, maxlength: 500, default: "" },
     price: { type: Number, min: 0, default: 0 },
-    currency: { type: String, default: "INR", maxlength: 3 },
+    currency: { type: String, enum: ["INR", "USD"], default: "INR" },
     billingCycle: { type: String, enum: BILLING_CYCLES, default: "yearly" },
     durationDays: { type: Number, min: 1, max: 3650, default: 365 },
     employeeLimit: { type: Number, min: 1, default: null }, // null = unlimited
     features: featuresShape,
     isActive: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 0 },
+    isBuiltIn: { type: Boolean, default: false },
+    website: {
+      showOnWebsite: { type: Boolean, default: true },
+      group: { type: String, trim: true, maxlength: 40, default: "" },
+      groupSubtitle: { type: String, trim: true, maxlength: 80, default: "" },
+      userRangeLabel: { type: String, trim: true, maxlength: 30, default: "" },
+      description: { type: String, trim: true, maxlength: 200, default: "" },
+      badge: { type: String, trim: true, maxlength: 24, default: "" },
+      featured: { type: Boolean, default: false },
+      priceMode: { type: String, enum: ["price", "per_user", "custom"], default: "price" },
+      showMonthlyEquivalent: { type: Boolean, default: false },
+      monthlyPrice: { type: Number, min: 0, validate: { validator: (value) => value === undefined || Number.isInteger(value), message: "Monthly price must be a whole number." } },
+      freeLabel: { type: String, trim: true, maxlength: 20, default: "" },
+      priceSuffix: { type: String, trim: true, maxlength: 30, default: "" },
+      priceNote: { type: String, trim: true, maxlength: 80, default: "" },
+      ctaType: { type: String, enum: ["trial", "demo", "contact_sales"], default: "demo" },
+      ctaLabel: { type: String, trim: true, maxlength: 30, default: "" },
+      ctaNote: { type: String, trim: true, maxlength: 60, default: "" },
+      inheritsLabel: { type: String, trim: true, maxlength: 60, default: "" },
+      featureGroups: {
+        type: [
+          {
+            title: { type: String, trim: true, maxlength: 40 },
+            items: [{ type: String, trim: true, maxlength: 120 }],
+          },
+        ],
+        default: [],
+        validate: { validator: (groups) => groups.length <= 6, message: "A plan can have at most 6 feature groups." },
+      },
+    },
   },
   ts
 );
@@ -392,7 +423,8 @@ const leadSchema = new Schema(
     designation: { type: String, trim: true, maxlength: 120, default: "" },
     employees: { type: String, required: true, enum: ["1-25", "26-100", "101-500", "501-2000", "2000+"] },
     city: { type: String, trim: true, maxlength: 120, default: "" },
-    interest: { type: String, enum: ["demo", "trial", "pricing", "other"], default: "demo" },
+    interest: { type: String, enum: ["demo", "trial", "pricing", "sales", "other"], default: "demo" },
+    billingPreference: { type: String, enum: ["monthly", "yearly"], default: null },
     planInterest: { type: String, trim: true, maxlength: 120, default: "" },
     message: { type: String, trim: true, maxlength: 2000, default: "" },
     source: { type: String, trim: true, maxlength: 80, default: "website" },

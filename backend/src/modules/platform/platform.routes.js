@@ -99,19 +99,53 @@ router.get("/dashboard", async (_req, res) => {
 
 /* ═════════════ Plans ═════════════ */
 const featuresSchema = z.object(Object.fromEntries(FEATURE_KEYS.map((k) => [k, z.boolean().optional()]))).partial();
+const websiteFeatureGroup = z.object({ title: z.string().trim().min(1).max(40), items: z.array(z.string().trim().min(1).max(120)).max(10) });
+const websiteSchema = z.object({
+  showOnWebsite: z.boolean().optional(),
+  group: z.string().trim().max(40).optional(),
+  groupSubtitle: z.string().trim().max(80).optional(),
+  userRangeLabel: z.string().trim().max(30).optional(),
+  description: z.string().trim().max(200).optional(),
+  badge: z.string().trim().max(24).optional(),
+  featured: z.boolean().optional(),
+  priceMode: z.enum(["price", "per_user", "custom"]).optional(),
+  showMonthlyEquivalent: z.boolean().optional(),
+  monthlyPrice: z.coerce.number().int().min(0).optional(),
+  freeLabel: z.string().trim().max(20).optional(),
+  priceSuffix: z.string().trim().max(30).optional(),
+  priceNote: z.string().trim().max(80).optional(),
+  ctaType: z.enum(["trial", "demo", "contact_sales"]).optional(),
+  ctaLabel: z.string().trim().max(30).optional(),
+  ctaNote: z.string().trim().max(60).optional(),
+  inheritsLabel: z.string().trim().max(60).optional(),
+  featureGroups: z.array(websiteFeatureGroup).max(6).optional(),
+}).optional();
 const planBody = z.object({
   name: z.string().trim().min(2).max(80),
   code: z.string().trim().toLowerCase().regex(/^[a-z0-9-]{2,40}$/, "Use 2-40 lowercase letters, numbers or dashes").optional(),
   description: optStr(500),
   price: z.coerce.number().min(0).max(1e9),
-  currency: z.string().trim().length(3).toUpperCase().optional(),
+  currency: z.enum(["INR", "USD"]).optional(),
   billingCycle: z.enum(BILLING_CYCLES),
   durationDays: z.coerce.number().int().min(1).max(3650),
   employeeLimit: z.union([z.coerce.number().int().min(1).max(1_000_000), z.null()]).optional(),
   features: featuresSchema.optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.coerce.number().int().optional(),
+  website: websiteSchema,
 });
+
+function validatePlanPricing(plan) {
+  const website = plan.website || {};
+  if (website.showMonthlyEquivalent && ["price", "per_user"].includes(website.priceMode || "price") && plan.price % 12 !== 0) {
+    throw badRequest("Yearly price must divide evenly by 12 so the monthly price is a whole number.");
+  }
+  if (plan.currency === "USD" && !Number.isInteger(plan.price)) throw badRequest("USD prices must be whole dollars.");
+  if (website.monthlyPrice !== undefined && plan.currency === "USD" && !Number.isInteger(website.monthlyPrice)) throw badRequest("USD monthly prices must be whole dollars.");
+  if (website.monthlyPrice !== undefined && website.showMonthlyEquivalent && website.monthlyPrice < plan.price / 12) {
+    throw badRequest("Monthly price cannot be lower than the yearly equivalent.");
+  }
+}
 
 router.get("/plans", async (_req, res) => {
   const plans = await Plan.find({}).sort({ sortOrder: 1, createdAt: 1 }).lean();
@@ -122,9 +156,11 @@ router.get("/plans", async (_req, res) => {
 
 router.post("/plans", async (req, res) => {
   const b = parse(planBody, req.body);
+  validatePlanPricing(b);
   const code = b.code || slugify(b.name, 40);
   if (await Plan.exists({ code })) throw conflict(`A plan with code "${code}" already exists.`);
-  const plan = await Plan.create({ ...b, code });
+  const sortOrder = b.sortOrder ?? (((await Plan.findOne({}).sort({ sortOrder: -1 }).select("sortOrder").lean())?.sortOrder || 0) + 10);
+  const plan = await Plan.create({ ...b, code, sortOrder });
   audit(req, { action: "plan.created", entity: "Plan", entityId: plan._id, summary: plan.name, organizationId: null });
   res.status(201).json({ success: true, data: plan });
 });
@@ -135,9 +171,11 @@ router.patch("/plans/:id", async (req, res) => {
   const plan = await Plan.findById(req.params.id);
   if (!plan) throw notFound("Plan not found.");
   if (b.code && b.code !== plan.code && (await Plan.exists({ code: b.code }))) throw conflict(`A plan with code "${b.code}" already exists.`);
-  const { features, ...rest } = b;
+  validatePlanPricing({ ...plan.toObject(), ...b, website: { ...(plan.website?.toObject?.() || plan.website || {}), ...(b.website || {}) } });
+  const { features, website, ...rest } = b;
   Object.assign(plan, rest);
   if (features) for (const [k, v] of Object.entries(features)) if (typeof v === "boolean") plan.features[k] = v;
+  if (website) Object.assign(plan.website, website);
   await plan.save();
   audit(req, { action: "plan.updated", entity: "Plan", entityId: plan._id, summary: plan.name, organizationId: null });
   res.json({ success: true, data: plan });
@@ -146,6 +184,8 @@ router.patch("/plans/:id", async (req, res) => {
 router.delete("/plans/:id", async (req, res) => {
   assertId(req.params.id);
   const used = await Subscription.exists({ planId: req.params.id }).setOptions(SKIP);
+  const plan = await Plan.findById(req.params.id).select("isBuiltIn");
+  if (plan?.isBuiltIn) throw badRequest("Built-in plans cannot be deleted. Hide it from the website or deactivate it instead.");
   if (used) {
     await Plan.updateOne({ _id: req.params.id }, { isActive: false });
     return res.json({ success: true, message: "This plan is used by subscriptions, so it was deactivated instead of deleted." });

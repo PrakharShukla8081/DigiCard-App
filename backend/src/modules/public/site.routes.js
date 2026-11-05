@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { Lead, Plan, PlatformSetting, User } from "../../models/index.js";
+import { Lead, Plan, PlatformSetting, Testimonial, User } from "../../models/index.js";
 import { FEATURES, ROLES } from "../../common/constants.js";
 import { parse, emailSchema, isValidPhone, normalizePhone, pageParams, escapeRegex } from "../../common/validate.js";
 import { badRequest, notFound } from "../../common/errors.js";
@@ -16,7 +16,7 @@ const employeeRanges = ["1-25", "26-100", "101-500", "501-2000", "2000+"];
 
 router.get("/plans", plansLimiter, async (_req, res) => {
   const [plans, settings] = await Promise.all([
-    Plan.find({ isActive: true }).sort({ sortOrder: 1, price: 1 }).lean(),
+    Plan.find({ isActive: true, "website.showOnWebsite": true }).sort({ sortOrder: 1, createdAt: 1 }).lean(),
     PlatformSetting.findOne({ key: "platform" }).lean(),
   ]);
   res.setHeader("Cache-Control", "public, max-age=60");
@@ -28,17 +28,35 @@ router.get("/plans", plansLimiter, async (_req, res) => {
         name: plan.name,
         code: plan.code,
         description: plan.description,
-        price: plan.price,
+        price: plan.website?.priceMode === "custom" ? null : plan.price,
         currency: plan.currency,
         billingCycle: plan.billingCycle,
         durationDays: plan.durationDays,
         employeeLimit: plan.employeeLimit,
+        sortOrder: plan.sortOrder,
         features: Object.entries(FEATURES).map(([key, label]) => ({ key, label, included: Boolean(plan.features?.[key]) })),
+        website: plan.website,
+        monthlyPrice: plan.website?.monthlyPrice ?? null,
       })),
+      billing: {
+        hasMonthly: plans.some((plan) => plan.website?.monthlyPrice !== undefined),
+        maxYearlySavingsPercent: Math.max(0, ...plans.filter((plan) => plan.website?.monthlyPrice > 0 && plan.price > 0).map((plan) => Math.floor((1 - (plan.price / 12) / plan.website.monthlyPrice) * 100))),
+      },
+      groups: [...new Map([...plans].sort((a, b) => a.sortOrder - b.sortOrder).map((plan) => [plan.website?.group || "Plans", { name: plan.website?.group || "Plans", subtitle: plan.website?.groupSubtitle || "" }])).values()],
       support: { email: settings?.supportEmail || "", phone: settings?.supportPhone || "" },
       trialDays: settings?.defaultTrialDays || 14,
     },
   });
+});
+
+router.get("/testimonials", plansLimiter, async (_req, res) => {
+  const testimonials = await Testimonial.find({ isPublished: true, consentConfirmed: true })
+    .sort({ sortOrder: 1, createdAt: -1 })
+    .limit(12)
+    .select("name role company quote rating")
+    .lean();
+  res.setHeader("Cache-Control", "public, max-age=60");
+  res.json({ success: true, data: testimonials });
 });
 
 const demoSchema = z.object({
@@ -49,7 +67,8 @@ const demoSchema = z.object({
   designation: z.string().trim().max(120).optional(),
   employees: z.enum(employeeRanges),
   city: z.string().trim().max(120).optional(),
-  interest: z.enum(["demo", "trial", "pricing", "other"]).default("demo"),
+  interest: z.enum(["demo", "trial", "pricing", "sales", "other"]).default("demo"),
+  billingPreference: z.enum(["monthly", "yearly"]).optional(),
   planInterest: z.string().trim().max(120).optional(),
   message: z.string().trim().max(2000).optional(),
   consent: z.literal(true, { error: "Consent is required" }),
@@ -67,6 +86,7 @@ router.post("/demo-requests", leadLimiter, async (req, res) => {
     designation: b.designation || "",
     city: b.city || "",
     planInterest: b.planInterest || "",
+    billingPreference: b.billingPreference || null,
     message: b.message || "",
     source: "website",
   });

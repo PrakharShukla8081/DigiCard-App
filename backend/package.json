@@ -11,6 +11,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "seed": "node src/scripts/seed.js",
+    "plans:sync": "node src/scripts/sync-builtin-plans.js",
     "test": "node --test --test-concurrency=1 tests/*.test.js",
     "migrate:cloudinary": "node src/scripts/migrate-to-cloudinary.js"
   },

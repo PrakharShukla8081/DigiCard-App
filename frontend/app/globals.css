@@ -113,4 +113,98 @@
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
+  .reveal {
+    --reveal-delay: 0ms;
+  }
+  .js-reveal .reveal {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  .js-reveal .reveal.reveal-visible {
+    animation: marketing-reveal 600ms ease-out var(--reveal-delay) forwards;
+  }
+  .mini-mockup {
+    min-height: 116px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    padding: 16px;
+    color: var(--fg);
+  }
+  .marketing-card-lift {
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+  .marketing-card-lift:hover,
+  .marketing-card-lift:focus-within {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+  }
+  .hero-phone {
+    isolation: isolate;
+    animation: marketing-phone-float 6s ease-in-out infinite;
+  }
+  .hero-phone-glow {
+    position: absolute;
+    inset: 12% 8% 8%;
+    z-index: -1;
+    border-radius: 999px;
+    background: var(--accent);
+    filter: blur(55px);
+    opacity: 0.18;
+  }
+  .hero-card-crossfade {
+    animation: marketing-crossfade 450ms ease-out;
+  }
+  .hero-card .vc-act.wa span {
+    animation: marketing-ring 2.4s ease-in-out infinite;
+  }
+  .marketing-toast {
+    animation: marketing-toast 10s ease-in-out infinite;
+  }
+  .marketing-draw-line {
+    animation: marketing-draw-line 900ms ease-out 300ms forwards;
+  }
+}
+
+/* Marketing animations */
+@keyframes marketing-reveal {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes marketing-crossfade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes marketing-phone-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes marketing-toast {
+  0%, 10% { opacity: 0; transform: translateX(14px); }
+  18%, 72% { opacity: 1; transform: translateX(0); }
+  84%, 100% { opacity: 0; transform: translateX(14px); }
+}
+@keyframes marketing-ring {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--b2) 35%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--b2) 0%, transparent); }
+}
+@keyframes marketing-draw-line {
+  to { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .js-reveal .reveal,
+  .js-reveal .reveal.reveal-visible {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+  .marketing-phone-float,
+  .marketing-toast,
+  .marketing-card-lift,
+  .marketing-ring,
+  .marketing-draw-line {
+    animation: none !important;
+    transition: none !important;
+  }
+  .hero-phone { animation: none; }
 }

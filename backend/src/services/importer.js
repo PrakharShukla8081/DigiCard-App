@@ -78,33 +78,63 @@ export async function parseSheet(buffer, fileName) {
   let rows = [];
   if (/\.xlsx$/i.test(fileName)) {
     // Streaming reader: lower memory for big files, and it ignores cell comments/notes,
-    // drawings and styles (the full loader crashes on some files that contain comments).
-    const reader = new ExcelJS.stream.xlsx.WorkbookReader(Readable.from(buffer), {
-      worksheets: "emit",
-      sharedStrings: "cache",
-      hyperlinks: "cache",
-      styles: "ignore",
-      entries: "emit",
-    });
-    for await (const ws of reader) {
-      const sheetRows = [];
-      let sheetHeaders = [];
-      for await (const row of ws) {
-        const vals = [];
-        row.eachCell({ includeEmpty: true }, (cell, col) => (vals[col - 1] = cellToString(cell.value).trim()));
-        if (!vals.some((v) => v)) continue;
-        if (!sheetHeaders.length) sheetHeaders = vals.map(normHeader);
-        else sheetRows.push({ rowNumber: row.number, cells: vals });
+    // drawings and styles. Some ExcelJS versions cannot stream workbooks with multiple
+    // sheets, so retain a compatible full-loader fallback.
+    try {
+      const reader = new ExcelJS.stream.xlsx.WorkbookReader(Readable.from(buffer), {
+        worksheets: "emit",
+        sharedStrings: "cache",
+        hyperlinks: "cache",
+        styles: "ignore",
+        entries: "emit",
+      });
+      for await (const ws of reader) {
+        const sheetRows = [];
+        let sheetHeaders = [];
+        for await (const row of ws) {
+          const vals = [];
+          row.eachCell({ includeEmpty: true }, (cell, col) => (vals[col - 1] = cellToString(cell.value).trim()));
+          if (!vals.some((v) => v)) continue;
+          if (!sheetHeaders.length) sheetHeaders = vals.map(normHeader);
+          else sheetRows.push({ rowNumber: row.number, cells: vals });
+        }
+        if (!sheetHeaders.length) continue;
+        if (sheetHeaders.some((h) => HEADER_MAP[h] === "employeeCode")) {
+          headers = sheetHeaders;
+          rows = sheetRows;
+          break;
+        }
+        if (!headers.length) {
+          headers = sheetHeaders;
+          rows = sheetRows;
+        }
       }
-      if (!sheetHeaders.length) continue;
-      if (sheetHeaders.some((h) => HEADER_MAP[h] === "employeeCode")) {
-        headers = sheetHeaders; // first sheet that has an "Employee ID" column wins
-        rows = sheetRows;
-        break;
-      }
-      if (!headers.length) {
-        headers = sheetHeaders; // fallback: first sheet with data (gives a clear "column not found" error)
-        rows = sheetRows;
+    } catch (error) {
+      logger.warn("XLSX streaming parse failed; using compatible workbook loader:", error.message);
+      headers = [];
+      rows = [];
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(buffer);
+      for (const worksheet of workbook.worksheets) {
+        const sheetRows = [];
+        let sheetHeaders = [];
+        worksheet.eachRow((row) => {
+          const vals = [];
+          row.eachCell({ includeEmpty: true }, (cell, col) => (vals[col - 1] = cellToString(cell.value).trim()));
+          if (!vals.some((v) => v)) return;
+          if (!sheetHeaders.length) sheetHeaders = vals.map(normHeader);
+          else sheetRows.push({ rowNumber: row.number, cells: vals });
+        });
+        if (!sheetHeaders.length) continue;
+        if (sheetHeaders.some((h) => HEADER_MAP[h] === "employeeCode")) {
+          headers = sheetHeaders;
+          rows = sheetRows;
+          break;
+        }
+        if (!headers.length) {
+          headers = sheetHeaders;
+          rows = sheetRows;
+        }
       }
     }
     if (!headers.length) throw new Error("The Excel file has no data. Put the employees on the first sheet with a header row.");

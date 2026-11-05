@@ -14,6 +14,7 @@ import meRoutes from "./modules/me/me.routes.js";
 import publicRoutes from "./modules/public/public.routes.js";
 import publicSiteRoutes from "./modules/public/site.routes.js";
 import platformLeadsRoutes from "./modules/platform/leads.routes.js";
+import platformTestimonialsRoutes from "./modules/platform/testimonials.routes.js";
 
 export function createApp() {
   const app = express();
@@ -57,6 +58,7 @@ export function createApp() {
   app.use("/api/auth", authRoutes);
   app.use("/api/public/site", publicSiteRoutes);
   app.use("/api/platform/leads", platformLeadsRoutes);
+  app.use("/api/platform/testimonials", platformTestimonialsRoutes);
   app.use("/api/platform", platformRoutes);
   app.use("/api/org", orgRoutes);
   app.use("/api/me", meRoutes);

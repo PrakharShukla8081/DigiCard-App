@@ -11,7 +11,7 @@ import { audit } from "../../services/audit.js";
 const router = Router();
 router.use(authenticate, requireRole(ROLES.SUPER_ADMIN));
 const statuses = ["new", "contacted", "qualified", "won", "lost"];
-const interests = ["demo", "trial", "pricing", "other"];
+const interests = ["demo", "trial", "pricing", "sales", "other"];
 
 function filters(query) {
   const out = {};
@@ -38,7 +38,7 @@ router.get("/", async (req, res) => {
 router.get("/export.csv", async (req, res) => {
   const items = await Lead.find(filters(req.query)).sort({ createdAt: -1 }).lean();
   const csv = toCsv(
-    ["Date", "Name", "Email", "Phone", "Company", "Designation", "Team size", "City", "Interest", "Plan", "Message", "Consent", "Status", "Notes"],
+    ["Date", "Name", "Email", "Phone", "Company", "Designation", "Team size", "City", "Interest", "Plan", "Billing", "Message", "Consent", "Status", "Notes"],
     items.map((lead) => [
       new Date(lead.createdAt).toISOString(),
       lead.name,
@@ -50,6 +50,7 @@ router.get("/export.csv", async (req, res) => {
       lead.city,
       lead.interest,
       lead.planInterest,
+      lead.billingPreference,
       lead.message,
       lead.consent ? "Yes" : "No",
       lead.status,

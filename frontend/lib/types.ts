@@ -77,7 +77,7 @@ export type Plan = {
   code: string;
   description: string;
   price: number;
-  currency: string;
+  currency: "INR" | "USD";
   billingCycle: string;
   durationDays: number;
   employeeLimit: number | null;
@@ -85,6 +85,22 @@ export type Plan = {
   isActive: boolean;
   sortOrder: number;
   organizations?: number;
+  isBuiltIn?: boolean;
+  website?: {
+    showOnWebsite?: boolean;
+    group?: string;
+    groupSubtitle?: string;
+    userRangeLabel?: string;
+    description?: string;
+    badge?: string;
+    featured?: boolean;
+    priceMode?: "price" | "per_user" | "custom";
+    showMonthlyEquivalent?: boolean;
+    monthlyPrice?: number;
+    ctaType?: "trial" | "demo" | "contact_sales";
+    ctaLabel?: string;
+    featureGroups?: { title: string; items: string[] }[];
+  };
 };
 
 export type Invite = { link: string; emailSent: boolean; emailError: "not_configured" | "testing_mode" | "invalid_from" | "send_failed" | null };

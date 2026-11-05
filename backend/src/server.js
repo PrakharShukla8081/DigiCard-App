@@ -5,11 +5,23 @@ import { logger } from "./common/logger.js";
 import { ImportJob } from "./models/index.js";
 import { startScheduler } from "./jobs/scheduler.js";
 import { ensureSuperAdmin } from "./services/bootstrap.js";
+import { ensureBuiltInPlans, syncBuiltInPlans } from "./services/builtinPlans.js";
 
 async function main() {
   assertEnv();
   await connectDB();
   await ensureSuperAdmin();
+  if (!env.isTest) {
+    try {
+      await ensureBuiltInPlans();
+      if (process.env.SYNC_BUILTIN_PLANS === "apply") {
+        const result = await syncBuiltInPlans({ apply: true });
+        logger.info(`Built-in plan sync applied: ${result.summary.length} existing plan${result.summary.length === 1 ? "" : "s"} processed.`);
+      }
+    } catch (e) {
+      logger.warn("Built-in pricing plan setup failed:", e.message);
+    }
+  }
 
   // Imports run inside this process; anything still "processing" after a restart can never finish.
   await ImportJob.updateMany(

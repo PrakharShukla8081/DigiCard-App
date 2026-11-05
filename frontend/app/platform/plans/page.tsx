@@ -10,6 +10,7 @@ import type { Plan } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Chip, Dialog, Empty, ErrorBox, PageHeader, PageLoader, Panel, ToggleRow, useConfirm } from "@/components/ui/misc";
+import { PricingCard, type WebsitePlan } from "@/components/site/pricing-card";
 
 type Form = Omit<Plan, "_id" | "employeeLimit" | "price" | "durationDays" | "sortOrder"> & { employeeLimit: string; price: string; durationDays: string; sortOrder: string };
 const CYCLES: Record<string, number> = { monthly: 30, quarterly: 90, half_yearly: 182, yearly: 365, custom: 365 };
@@ -22,6 +23,7 @@ export default function PlansPage() {
   });
   const [editing, setEditing] = useState<{ id?: string; form: Form } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [previewBilling, setPreviewBilling] = useState<"yearly" | "monthly">("yearly");
 
   if (loading && !data) return <PageLoader />;
   if (error) return <ErrorBox message={error} onRetry={reload} />;
@@ -42,6 +44,21 @@ export default function PlansPage() {
         features: { ...(p?.features || {}) },
         isActive: p?.isActive ?? true,
         sortOrder: p ? String(p.sortOrder) : String(data.plans.length + 1),
+        website: {
+          showOnWebsite: p?.website?.showOnWebsite ?? true,
+          group: p?.website?.group || "For Organizations",
+          groupSubtitle: p?.website?.groupSubtitle || "",
+          userRangeLabel: p?.website?.userRangeLabel || "",
+          description: p?.website?.description || "",
+          badge: p?.website?.badge || "",
+          featured: p?.website?.featured ?? false,
+          priceMode: p?.website?.priceMode || "price",
+          showMonthlyEquivalent: p?.website?.showMonthlyEquivalent ?? false,
+          monthlyPrice: p?.website?.monthlyPrice,
+          ctaType: p?.website?.ctaType || "demo",
+          ctaLabel: p?.website?.ctaLabel || "",
+          featureGroups: p?.website?.featureGroups || [],
+        },
       },
     });
 
@@ -60,6 +77,7 @@ export default function PlansPage() {
       features: f.features,
       isActive: f.isActive,
       sortOrder: Number(f.sortOrder || 0),
+      website: f.website,
     };
     setBusy(true);
     try {
@@ -102,7 +120,7 @@ export default function PlansPage() {
                   <h2 className="text-lg font-bold">{p.name}</h2>
                   <div className="text-[12px] text-muted">code: {p.code}</div>
                 </div>
-                {p.isActive ? <Chip tone="ok">Active</Chip> : <Chip>Inactive</Chip>}
+                <div className="flex flex-wrap justify-end gap-1">{p.isBuiltIn && <Chip>Built-in</Chip>}{p.website?.showOnWebsite && <Chip tone="ok">Website</Chip>}{p.isActive ? <Chip tone="ok">Active</Chip> : <Chip>Inactive</Chip>}</div>
               </div>
               <div className="mt-3 font-display text-[28px] leading-none font-bold">
                 {p.currency} {fmtNum(p.price)}
@@ -128,6 +146,7 @@ export default function PlansPage() {
                   size="sm"
                   variant="ghost"
                   onClick={async () => {
+                    if (p.isBuiltIn) return toast.error("Built-in plans cannot be deleted. Hide or deactivate the plan instead.");
                     if (!(await confirm({ title: `Delete ${p.name}?`, body: "Plans used by any subscription are deactivated instead of deleted.", confirmLabel: "Delete", danger: true }))) return;
                     try {
                       const r = await api.del(`/platform/plans/${p._id}`);
@@ -170,8 +189,8 @@ export default function PlansPage() {
             </Field>
             <Field label="Price" htmlFor="p-price">
               <div className="flex gap-2">
-                <Select className="w-24" value={editing.form.currency} onChange={(e) => set({ currency: e.target.value })} aria-label="Currency">
-                  {["INR", "USD", "AED", "EUR", "GBP"].map((c) => (
+                <Select className="w-24" value={editing.form.currency} onChange={(e) => set({ currency: e.target.value as "INR" | "USD" })} aria-label="Currency">
+                  {["INR", "USD"].map((c) => (
                     <option key={c}>{c}</option>
                   ))}
                 </Select>
@@ -196,6 +215,21 @@ export default function PlansPage() {
             <Field label="Description" htmlFor="p-desc" className="sm:col-span-2">
               <Textarea id="p-desc" value={editing.form.description} onChange={(e) => set({ description: e.target.value })} />
             </Field>
+            <div className="sm:col-span-2 rounded-xl border border-line p-4">
+              <div className="eyebrow mb-3">Website presentation</div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ToggleRow title="Show on public pricing" checked={Boolean(editing.form.website?.showOnWebsite)} onChange={(v) => set({ website: { ...editing.form.website, showOnWebsite: v } })} />
+                <ToggleRow title="Featured card" checked={Boolean(editing.form.website?.featured)} onChange={(v) => set({ website: { ...editing.form.website, featured: v } })} />
+                <Field label="Group" htmlFor="p-group"><Input id="p-group" value={editing.form.website?.group || ""} onChange={(e) => set({ website: { ...editing.form.website, group: e.target.value } })} placeholder="For Organizations" /></Field>
+                <Field label="User range" htmlFor="p-range"><Input id="p-range" value={editing.form.website?.userRangeLabel || ""} onChange={(e) => set({ website: { ...editing.form.website, userRangeLabel: e.target.value } })} placeholder="5–100 users" /></Field>
+                <Field label="Website description" htmlFor="p-web-desc" className="sm:col-span-2"><Textarea id="p-web-desc" value={editing.form.website?.description || ""} onChange={(e) => set({ website: { ...editing.form.website, description: e.target.value } })} /></Field>
+                <Field label="Price display" htmlFor="p-price-mode"><Select id="p-price-mode" value={editing.form.website?.priceMode || "price"} onChange={(e) => set({ website: { ...editing.form.website, priceMode: e.target.value as "price" | "per_user" | "custom" } })}><option value="price">Price</option><option value="per_user">Per user</option><option value="custom">Custom pricing</option></Select></Field>
+                <Field label="CTA type" htmlFor="p-cta"><Select id="p-cta" value={editing.form.website?.ctaType || "demo"} onChange={(e) => set({ website: { ...editing.form.website, ctaType: e.target.value as "trial" | "demo" | "contact_sales" } })}><option value="trial">Free trial</option><option value="demo">Book a demo</option><option value="contact_sales">Contact sales</option></Select></Field>
+                <Field label="CTA label" htmlFor="p-cta-label"><Input id="p-cta-label" value={editing.form.website?.ctaLabel || ""} onChange={(e) => set({ website: { ...editing.form.website, ctaLabel: e.target.value } })} /></Field>
+                <ToggleRow title="Show monthly equivalent" checked={Boolean(editing.form.website?.showMonthlyEquivalent)} onChange={(v) => set({ website: { ...editing.form.website, showMonthlyEquivalent: v } })} />
+                <Field label="Monthly price (optional)" htmlFor="p-monthly-price" hint="Display price when billed monthly"><Input id="p-monthly-price" type="number" min={0} value={editing.form.website?.monthlyPrice ?? ""} onChange={(e) => set({ website: { ...editing.form.website, monthlyPrice: e.target.value ? Number(e.target.value) : undefined } })} /></Field>
+              </div>
+            </div>
             <div className="sm:col-span-2">
               <div className="eyebrow mb-2">Features</div>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -204,6 +238,27 @@ export default function PlansPage() {
                 ))}
               </div>
               <p className="mt-2 text-[12px] text-muted">Digital cards, QR codes and basic analytics are included in every plan.</p>
+            </div>
+            <div className="sm:col-span-2">
+              <div className="eyebrow mb-2">Live website preview</div>
+              <div className="mb-3 flex justify-end gap-1"><Button size="sm" variant={previewBilling === "yearly" ? "primary" : "outline"} onClick={() => setPreviewBilling("yearly")}>Yearly</Button><Button size="sm" variant={previewBilling === "monthly" ? "primary" : "outline"} onClick={() => setPreviewBilling("monthly")}>Monthly</Button></div>
+              <div className="mx-auto max-w-sm">
+                <PricingCard
+                  plan={{
+                    id: editing.id || "preview",
+                    name: editing.form.name || "Plan name",
+                    code: editing.form.code || "plan",
+                    description: editing.form.description,
+                    price: Number(editing.form.price || 0),
+                    currency: editing.form.currency,
+                    billingCycle: editing.form.billingCycle,
+                    employeeLimit: editing.form.employeeLimit ? Number(editing.form.employeeLimit) : null,
+                    sortOrder: Number(editing.form.sortOrder || 0),
+                    features: Object.entries(editing.form.features).map(([key, included]) => ({ key, label: data.features[key] || key, included: Boolean(included) })),
+                    website: editing.form.website,
+                  }} billing={previewBilling}
+                />
+              </div>
             </div>
             <ToggleRow title="Plan is active" sub="Inactive plans cannot be assigned to new subscriptions" checked={editing.form.isActive} onChange={(v) => set({ isActive: v })} />
             <Field label="Display order" htmlFor="p-sort">
