@@ -381,6 +381,32 @@ auditLogSchema.index({ organizationId: 1, createdAt: -1 });
 auditLogSchema.index({ createdAt: -1 });
 export const AuditLog = model("AuditLog", auditLogSchema);
 
+/* ───────────────────────── Website lead ───────────────────────── */
+// Website leads are platform data, not tenant-owned.
+const leadSchema = new Schema(
+  {
+    name: { type: String, required: true, trim: true, maxlength: 120 },
+    email: { type: String, required: true, lowercase: true, trim: true, maxlength: 254 },
+    phone: { type: String, trim: true, maxlength: 20, default: "" },
+    company: { type: String, required: true, trim: true, maxlength: 160 },
+    designation: { type: String, trim: true, maxlength: 120, default: "" },
+    employees: { type: String, required: true, enum: ["1-25", "26-100", "101-500", "501-2000", "2000+"] },
+    city: { type: String, trim: true, maxlength: 120, default: "" },
+    interest: { type: String, enum: ["demo", "trial", "pricing", "other"], default: "demo" },
+    planInterest: { type: String, trim: true, maxlength: 120, default: "" },
+    message: { type: String, trim: true, maxlength: 2000, default: "" },
+    source: { type: String, trim: true, maxlength: 80, default: "website" },
+    consent: { type: Boolean, required: true },
+    status: { type: String, enum: ["new", "contacted", "qualified", "won", "lost"], default: "new" },
+    notes: { type: String, trim: true, maxlength: 2000, default: "" },
+  },
+  ts
+);
+leadSchema.index({ createdAt: -1 });
+leadSchema.index({ status: 1, createdAt: -1 });
+leadSchema.index({ email: 1 });
+export const Lead = model("Lead", leadSchema);
+
 /* ───────────────────────── Platform settings (singleton) ───────────────────────── */
 const platformSettingSchema = new Schema(
   {

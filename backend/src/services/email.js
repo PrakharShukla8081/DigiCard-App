@@ -107,6 +107,28 @@ export const templates = {
       text: `New enquiry for ${employeeName}\n\n${["name", "email", "phone", "company", "message"].map((k) => `${k}: ${enquiry[k] || ""}`).join("\n")}`,
     };
   },
+  leadRequest({ lead, adminLink }) {
+    const rows = [
+      ["Name", lead.name],
+      ["Email", lead.email],
+      ["Phone", lead.phone],
+      ["Company", lead.company],
+      ["Designation", lead.designation],
+      ["Team size", lead.employees],
+      ["City", lead.city],
+      ["Interest", lead.interest],
+      ["Plan", lead.planInterest],
+      ["Message", lead.message],
+    ]
+      .filter(([, value]) => value)
+      .map(([key, value]) => `<tr><td style="padding:4px 12px 4px 0;color:#64748B">${esc(key)}</td><td style="padding:4px 0">${esc(value)}</td></tr>`)
+      .join("");
+    return {
+      subject: `New website lead from ${lead.name}`,
+      html: layout("New website lead", `<table>${rows}</table>`, adminLink ? { url: adminLink, label: "View website leads" } : null),
+      text: `New website lead\n\n${["name", "email", "phone", "company", "designation", "employees", "city", "interest", "planInterest", "message"].map((key) => `${key}: ${lead[key] || ""}`).join("\n")}`,
+    };
+  },
   expiry({ orgName, endDate, days }) {
     const d = new Date(endDate).toDateString();
     return {

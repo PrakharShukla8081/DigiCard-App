@@ -12,6 +12,8 @@ import platformRoutes from "./modules/platform/platform.routes.js";
 import orgRoutes from "./modules/org/org.routes.js";
 import meRoutes from "./modules/me/me.routes.js";
 import publicRoutes from "./modules/public/public.routes.js";
+import publicSiteRoutes from "./modules/public/site.routes.js";
+import platformLeadsRoutes from "./modules/platform/leads.routes.js";
 
 export function createApp() {
   const app = express();
@@ -53,6 +55,8 @@ export function createApp() {
   app.get("/api/health", (_req, res) => res.json({ success: true, status: "ok" }));
 
   app.use("/api/auth", authRoutes);
+  app.use("/api/public/site", publicSiteRoutes);
+  app.use("/api/platform/leads", platformLeadsRoutes);
   app.use("/api/platform", platformRoutes);
   app.use("/api/org", orgRoutes);
   app.use("/api/me", meRoutes);
