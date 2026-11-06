@@ -118,6 +118,7 @@ export const templates = {
       ["City", lead.city],
       ["Interest", lead.interest],
       ["Plan", lead.planInterest],
+      ["Billing", lead.billingPreference],
       ["Message", lead.message],
     ]
       .filter(([, value]) => value)
@@ -126,7 +127,7 @@ export const templates = {
     return {
       subject: `New website lead from ${lead.name}`,
       html: layout("New website lead", `<table>${rows}</table>`, adminLink ? { url: adminLink, label: "View website leads" } : null),
-      text: `New website lead\n\n${["name", "email", "phone", "company", "designation", "employees", "city", "interest", "planInterest", "message"].map((key) => `${key}: ${lead[key] || ""}`).join("\n")}`,
+      text: `New website lead\n\n${["name", "email", "phone", "company", "designation", "employees", "city", "interest", "planInterest", "billingPreference", "message"].map((key) => `${key}: ${lead[key] || ""}`).join("\n")}`,
     };
   },
   expiry({ orgName, endDate, days }) {

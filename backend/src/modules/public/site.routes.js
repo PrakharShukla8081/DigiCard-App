@@ -42,7 +42,14 @@ router.get("/plans", plansLimiter, async (_req, res) => {
         hasMonthly: plans.some((plan) => plan.website?.monthlyPrice !== undefined),
         maxYearlySavingsPercent: Math.max(0, ...plans.filter((plan) => plan.website?.monthlyPrice > 0 && plan.price > 0).map((plan) => Math.floor((1 - (plan.price / 12) / plan.website.monthlyPrice) * 100))),
       },
-      groups: [...new Map([...plans].sort((a, b) => a.sortOrder - b.sortOrder).map((plan) => [plan.website?.group || "Plans", { name: plan.website?.group || "Plans", subtitle: plan.website?.groupSubtitle || "" }])).values()],
+      groups: [...[...plans].sort((a, b) => a.sortOrder - b.sortOrder).reduce((groups, plan) => {
+        const name = plan.website?.group || "Plans";
+        const subtitle = plan.website?.groupSubtitle?.trim() || "";
+        const group = groups.get(name);
+        if (!group) groups.set(name, { name, subtitle });
+        else if (!group.subtitle && subtitle) group.subtitle = subtitle;
+        return groups;
+      }, new Map()).values()],
       support: { email: settings?.supportEmail || "", phone: settings?.supportPhone || "" },
       trialDays: settings?.defaultTrialDays || 14,
     },

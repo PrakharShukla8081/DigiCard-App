@@ -46,7 +46,7 @@ router.patch("/:id", async (req, res) => {
   const current = await Testimonial.findById(req.params.id).lean();
   if (!current) throw notFound("Testimonial not found.");
   assertPublishable({ ...current, ...body });
-  const testimonial = await Testimonial.findByIdAndUpdate(req.params.id, { $set: body }, { new: true, runValidators: true }).lean();
+  const testimonial = await Testimonial.findByIdAndUpdate(req.params.id, { $set: body }, { returnDocument: "after", runValidators: true }).lean();
   audit(req, { action: "testimonial.updated", entity: "Testimonial", entityId: testimonial._id, summary: `${testimonial.name} (${testimonial.company})`, organizationId: null });
   res.json({ success: true, data: testimonial });
 });

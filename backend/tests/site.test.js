@@ -61,6 +61,15 @@ test("public pricing returns monthly billing savings", async () => {
   assert.equal(result.json.data.billing.maxYearlySavingsPercent, 25);
 });
 
+test("public pricing keeps the first non-empty group subtitle", async () => {
+  await M.Plan.create([
+    { name: "Personal", code: "subtitle-personal", price: 0, currency: "USD", billingCycle: "yearly", durationDays: 365, website: { showOnWebsite: true, group: "Individuals", groupSubtitle: "One person, one card" }, sortOrder: 10 },
+    { name: "Professional", code: "subtitle-professional", price: 48, currency: "USD", billingCycle: "yearly", durationDays: 365, website: { showOnWebsite: true, group: "Individuals" }, sortOrder: 20 },
+  ]);
+  const result = await call("GET", "/api/public/site/plans", undefined, null);
+  assert.equal(result.json.data.groups.find((group) => group.name === "Individuals").subtitle, "One person, one card");
+});
+
 test("website plan visibility and pricing validation are enforced", async () => {
   const hidden = await call("POST", "/api/platform/plans", { name: "Hidden website", code: "hidden-website", price: 10, currency: "USD", billingCycle: "yearly", durationDays: 365, website: { showOnWebsite: false } });
   assert.equal(hidden.status, 201);

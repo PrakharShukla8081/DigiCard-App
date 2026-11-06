@@ -71,7 +71,7 @@ router.patch("/:id", async (req, res) => {
       .strict(),
     req.body
   );
-  const lead = await Lead.findByIdAndUpdate(req.params.id, { $set: body }, { new: true, runValidators: true }).lean();
+  const lead = await Lead.findByIdAndUpdate(req.params.id, { $set: body }, { returnDocument: "after", runValidators: true }).lean();
   if (!lead) throw notFound("Lead not found.");
   audit(req, { action: "lead.updated", entity: "Lead", entityId: lead._id, summary: `${lead.name} (${lead.company})`, organizationId: null });
   res.json({ success: true, data: lead });

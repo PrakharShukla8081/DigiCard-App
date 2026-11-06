@@ -49,6 +49,7 @@ export function PricingCard({ plan, billing = "yearly" }: { plan: WebsitePlan; b
   const href = `/demo?plan=${encodeURIComponent(plan.code)}&interest=${interest}&billing=${billing}`;
   const groups = website.featureGroups?.length ? website.featureGroups : [{ title: "Included", items: plan.features.filter((feature) => feature.included).map((feature) => feature.label) }];
   const isOneUser = website.userRangeLabel?.trim() === "1 user";
+  const primaryTrial = Boolean(website.badge && website.ctaType === "trial");
   const muted = featured ? "text-white/75" : "text-muted";
 
   return (
@@ -92,7 +93,7 @@ export function PricingCard({ plan, billing = "yearly" }: { plan: WebsitePlan; b
       <p className={`mt-5 text-sm leading-6 ${muted}`}>{website.description || plan.description}</p>
 
       <div className="mt-6">
-        <Button asChild variant="outline" className={`w-full ${featured ? "border-white bg-white text-indigo-700 hover:bg-white/90 hover:text-indigo-800" : website.ctaType === "trial" ? "border-accent text-accent hover:bg-accent-soft" : ""}`}>
+        <Button asChild variant={primaryTrial ? "primary" : "outline"} className={`w-full ${featured ? "border-white bg-white text-indigo-700 hover:bg-white/90 hover:text-indigo-800" : !primaryTrial && website.ctaType === "trial" ? "border-accent text-accent hover:bg-accent-soft" : ""}`}>
           <Link href={href}>{website.ctaLabel || (website.ctaType === "contact_sales" ? "Talk to sales" : website.ctaType === "demo" ? "Book a demo" : "Start free trial")}</Link>
         </Button>
         {website.ctaNote && <p className={`mt-2 text-center text-xs ${muted}`}>{website.ctaNote}</p>}

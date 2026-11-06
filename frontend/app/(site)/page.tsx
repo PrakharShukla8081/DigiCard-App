@@ -31,7 +31,7 @@ export const metadata: Metadata = {
 };
 
 type Testimonial = { name: string; role: string; company: string; quote: string; rating: number | null };
-type PlanData = { features: { label: string; included: boolean }[] };
+type PlanData = { currency: "INR" | "USD"; features: { label: string; included: boolean }[] };
 
 const audiences = [
   { icon: Building2, title: "For your company", items: ["Bulk upload with an error report", "Brand once for every card", "Analytics and leaderboard", "Email and WhatsApp reminders", "Plan seats and audit log"] },
@@ -58,7 +58,7 @@ const useCases = [
 
 async function getSiteData() {
   const base = process.env.BACKEND_URL;
-  if (!base) return { testimonials: [] as Testimonial[], featureLabels: [] as string[] };
+  if (!base) return { testimonials: [] as Testimonial[], featureLabels: [] as string[], currency: "USD" as const };
   try {
     const [testimonialsResponse, plansResponse] = await Promise.all([
       fetch(`${base}/api/public/site/testimonials`, { next: { revalidate: 300 } }),
@@ -68,15 +68,16 @@ async function getSiteData() {
     const plansJson = plansResponse.ok ? await plansResponse.json() : { data: { plans: [] } };
     const plans: PlanData[] = plansJson.data?.plans || [];
     const labels = Array.from(new Set(plans.flatMap((plan) => plan.features.filter((feature) => feature.included).map((feature) => feature.label))));
-    return { testimonials: testimonialsJson.data || [], featureLabels: labels };
+    return { testimonials: testimonialsJson.data || [], featureLabels: labels, currency: plans[0]?.currency || "USD" };
   } catch {
-    return { testimonials: [] as Testimonial[], featureLabels: [] as string[] };
+    return { testimonials: [] as Testimonial[], featureLabels: [] as string[], currency: "USD" as const };
   }
 }
 
 export default async function Home() {
-  const { testimonials, featureLabels } = await getSiteData();
+  const { testimonials, featureLabels, currency } = await getSiteData();
   const pricingFeatures = ["Bulk employee upload", "Custom branding", "Advanced analytics", "Automated email reminders"].filter((label) => featureLabels.some((available) => available.toLowerCase().includes(label.toLowerCase().split(" ")[0])));
+  const pricingCopy = currency === "INR" ? "Prices in ₹, GST extra" : "Prices in USD, taxes extra";
   return (
     <>
       <section className="page-pad mx-auto grid max-w-7xl items-center gap-8 py-8 lg:grid-cols-[1.05fr_.95fr] lg:gap-10 lg:py-10">
@@ -105,7 +106,7 @@ export default async function Home() {
 
       <section className="page-pad bg-[#0b1224] text-white"><div className="mx-auto max-w-7xl py-16 lg:py-20"><Reveal><div className="max-w-2xl"><div className="eyebrow text-white/60">SECURITY</div><h2 className="mt-3 text-3xl font-bold sm:text-4xl">Built for company data.</h2><p className="mt-4 text-[15px] leading-7 text-white/70">Clear access boundaries and operational safeguards support the way teams manage employee profiles.</p></div></Reveal><div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-4">{[{ title: "Company isolation", body: "Each company's data is isolated at API and database level.", Icon: LockKeyhole }, { title: "Role-based access", body: "Super Admin, Company Admin and Employee access is separated.", Icon: Users }, { title: "Audit log", body: "Platform and company actions can be reviewed in an audit trail.", Icon: ClipboardList }, { title: "Protected secrets", body: "Third-party secrets are encrypted and tokens are hashed.", Icon: ShieldCheck }].map(({ title, body, Icon }, index) => <Reveal key={title} delay={index * 80}><div className="marketing-card-lift h-full rounded-2xl border border-white/15 bg-white/5 p-5"><Icon className="size-6 text-[#a5b4fc]" /><h3 className="mt-4 font-bold">{title}</h3><p className="mt-2 text-[15px] leading-6 text-white/70">{body}</p></div></Reveal>)}</div></div></section>
 
-      <section className="page-pad py-16"><div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-5 rounded-3xl bg-accent px-6 py-9 text-accent-ink sm:flex-row sm:items-center sm:px-10"><div><div className="eyebrow text-accent-ink/70">Plans for your team</div><h2 className="mt-2 text-3xl font-bold">Start with the plan that fits your company.</h2><p className="mt-2 text-sm text-accent-ink/80">Plans sized by team — from small teams to thousands of employees. Prices in ₹ + GST.</p><div className="mt-4 flex flex-wrap gap-2">{(pricingFeatures.length ? pricingFeatures : ["Bulk upload", "Custom branding", "Analytics", "Reminders"]).map((feature) => <span key={feature} className="rounded-full border border-accent-ink/25 px-2.5 py-1 text-xs">{feature}</span>)}</div></div><Button asChild variant="outline" className="border-accent-ink/40 bg-transparent text-accent-ink hover:bg-accent-ink/10"><Link href="/pricing">See pricing</Link></Button></div></section>
+      <section className="page-pad py-16"><div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-5 rounded-3xl bg-accent px-6 py-9 text-accent-ink sm:flex-row sm:items-center sm:px-10"><div><div className="eyebrow text-accent-ink/70">Plans for your team</div><h2 className="mt-2 text-3xl font-bold">Start with the plan that fits your company.</h2><p className="mt-2 text-sm text-accent-ink/80">Plans sized by team — from small teams to thousands of employees. {pricingCopy}</p><div className="mt-4 flex flex-wrap gap-2">{(pricingFeatures.length ? pricingFeatures : ["Bulk upload", "Custom branding", "Analytics", "Reminders"]).map((feature) => <span key={feature} className="rounded-full border border-accent-ink/25 px-2.5 py-1 text-xs">{feature}</span>)}</div></div><Button asChild variant="outline" className="border-accent-ink/40 bg-transparent text-accent-ink hover:bg-accent-ink/10"><Link href="/pricing">See pricing</Link></Button></div></section>
 
       <section className="page-pad mx-auto max-w-7xl py-16"><Reveal><div className="max-w-2xl"><div className="eyebrow">Use cases</div><h2 className="mt-3 text-3xl font-bold sm:text-4xl">A useful card for every team that meets customers.</h2></div></Reveal><div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{useCases.map(([title, problem, solution, features], index) => <Reveal key={title} delay={index * 80}><Panel className="marketing-card-lift h-full p-5"><div className="eyebrow">Example scenario</div><h3 className="mt-3 text-lg font-bold">{title}</h3><p className="mt-3 text-[15px] leading-6 text-muted">{problem}</p><p className="mt-3 text-[15px] leading-6">{solution}</p><p className="mt-4 text-xs font-semibold text-accent">{features}</p></Panel></Reveal>)}</div></section>
 
