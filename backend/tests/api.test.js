@@ -331,25 +331,52 @@ test("public card shows only whitelisted data and tracks events", async () => {
   assert.equal((await adminB.patch(`/api/org/enquiries/${enquiries.data[0]._id}`, { status: "closed" })).status, 404);
 });
 
-test("privacy policy and verification stay scoped to their owners", async () => {
+test("enquiry consent is required and stored with the organization wording", async () => {
+  const missingConsent = await anon.post("/api/public/enquiries", { orgSlug: "abc-company", slug: "rahul-sharma", name: "No Consent", phone: "9876512345" });
+  assert.equal(missingConsent.status, 400);
+
+  const created = await anon.post("/api/public/enquiries", { orgSlug: "abc-company", slug: "rahul-sharma", name: "Consent Visitor", phone: "9876512345", consent: true });
+  assert.equal(created.status, 201, JSON.stringify(created));
+  const stored = await M.Enquiry.findOne({ organizationId: orgA._id, name: "Consent Visitor" }).sort({ createdAt: -1 }).lean();
+  assert.equal(stored.consent, true);
+  assert.match(stored.consentText, /ABC Company/);
+  assert.ok(stored.consentAt instanceof Date);
+});
+
+test("privacy policy URL accepts only HTTPS URLs", async () => {
   assert.equal((await adminA.patch("/api/org/settings/company", { privacyPolicyUrl: "http://abc.test/privacy" })).status, 400);
   assert.equal((await adminA.patch("/api/org/settings/company", { privacyPolicyUrl: "javascript:alert(1)" })).status, 400);
+});
+
+test("company admins cannot set organization verification", async () => {
   assert.equal((await adminA.patch("/api/org/settings/company", { verification: { isVerified: true } })).status, 200);
   assert.equal((await M.Organization.findById(orgA._id).lean()).verification.isVerified, false);
+  assert.equal((await adminA.patch(`/api/platform/organizations/${orgA._id}/verification`, { isVerified: true })).status, 403);
+});
 
+test("super admin can verify and unverify organizations with audit entries", async () => {
   let r = await sa.patch(`/api/platform/organizations/${orgA._id}/verification`, { isVerified: true, note: "Documents reviewed" });
   assert.equal(r.status, 200, r.message);
+  assert.equal(r.data.isVerified, true);
   assert.ok(r.data.verifiedAt);
+  r = await sa.patch(`/api/platform/organizations/${orgA._id}/verification`, { isVerified: false });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.isVerified, false);
+  assert.equal(r.data.verifiedAt, null);
+  const audit = await sa.get("/api/platform/audit-logs?limit=100");
+  assert.ok(audit.data.some((a) => a.action === "organization.verified"));
+  assert.ok(audit.data.some((a) => a.action === "organization.unverified"));
+});
+
+test("public cards expose only safe verification fields", async () => {
+  await sa.patch(`/api/platform/organizations/${orgA._id}/verification`, { isVerified: true, note: "Internal note" });
   const card = await anon.get("/api/public/cards/abc-company/rahul-sharma");
   assert.deepEqual(Object.keys(card.data.verified).sort(), ["isVerified", "verifiedAt"]);
   assert.equal(card.data.verified.isVerified, true);
-  assert.equal((await adminA.patch(`/api/platform/organizations/${orgA._id}/verification`, { isVerified: false })).status, 403);
-  const audit = await sa.get("/api/platform/audit-logs?limit=100");
-  assert.ok(audit.data.some((a) => a.action === "organization.verified"));
-
-  r = await sa.patch(`/api/platform/organizations/${orgA._id}/verification`, { isVerified: false });
-  assert.equal(r.status, 200);
-  assert.equal(r.data.verifiedAt, null);
+  assert.ok(card.data.verified.verifiedAt);
+  assert.equal(card.data.verified.note, undefined);
+  assert.equal(card.data.verified.verifiedBy, undefined);
+  await sa.patch(`/api/platform/organizations/${orgA._id}/verification`, { isVerified: false });
 });
 
 test("unpublished / inactive cards are hidden", async () => {
