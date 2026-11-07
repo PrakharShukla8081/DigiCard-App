@@ -2,11 +2,13 @@ import type { Metadata, Viewport } from "next";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/auth";
 import { ConfirmProvider } from "@/components/ui/misc";
+import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "Beno Digital Card", template: "%s · Beno Digital Card" },
   description: "Digital visiting cards for every employee — managed centrally by your company.",
+  appleWebApp: { capable: true, title: "Beno Card", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
@@ -32,6 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <ConfirmProvider>{children}</ConfirmProvider>
         </AuthProvider>
+        <ServiceWorkerRegistration />
         <Toaster position="bottom-center" richColors closeButton />
       </body>
     </html>

@@ -14,6 +14,7 @@ import { PhoneFrame } from "@/components/card/phone-frame";
 import { QrBlock } from "@/components/card/qr-tools";
 import { ShareKit } from "@/components/card/share-kit";
 import { Legend, TrendChart } from "@/components/charts/trend";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
 
 type Me = { employee: { name: string; url: string; slug: string; employeeCode: string; cardStatus: string; isPublished: boolean; photoUrl: string }; editableFields: string[]; card: CardPayload };
 type Stats = { totals: Record<string, number>; series: { day: string; views: number; shares: number; saves: number }[] };
@@ -43,6 +44,7 @@ export default function MyCardPage() {
         sub="This is your digital visiting card. Share the link or QR code with customers."
         actions={
           <>
+            <InstallAppButton />
             <Button asChild>
               <a href={e.url} target="_blank" rel="noopener noreferrer">
                 <ExternalLink /> Open my card
