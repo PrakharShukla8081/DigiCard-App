@@ -100,6 +100,13 @@ const organizationSchema = new Schema(
       logoKey: { type: String, default: "" },
       primaryColor: { type: String, default: "#4F46E5" },
       secondaryColor: { type: String, default: "#10B981" },
+      qr: {
+        foreground: { type: String, default: "#111827" },
+        background: { type: String, default: "#FFFFFF" },
+        useLogo: { type: Boolean, default: true },
+        frame: { type: String, enum: ["none", "label"], default: "none" },
+        frameText: { type: String, trim: true, maxlength: 40, default: "Scan to save my contact" },
+      },
       description: { type: String, default: "" },
       tagline: { type: String, default: "" },
       social: socialShape,

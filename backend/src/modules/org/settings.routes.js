@@ -11,6 +11,17 @@ import { saveImage, deleteFile } from "../../storage/index.js";
 import { youtubeId } from "../../services/cards.js";
 import { audit } from "../../services/audit.js";
 import { canEncrypt, encrypt } from "../../common/crypto.js";
+import { DEFAULT_QR } from "../../services/qr.js";
+
+function contrastRatio(foreground, background) {
+  const luminance = (hex) => {
+    const rgb = hex.slice(1).match(/.{2}/g).map((v) => parseInt(v, 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+  };
+  const a = luminance(foreground);
+  const b = luminance(background);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
 
 /* ═════════════ Company settings & branding ═════════════ */
 export const settingsRouter = Router();
@@ -49,6 +60,16 @@ settingsRouter.patch("/company", async (req, res) => {
         .object({
           primaryColor: hexColor.optional(),
           secondaryColor: hexColor.optional(),
+          qr: z
+            .object({
+              foreground: hexColor.optional(),
+              background: hexColor.optional(),
+              useLogo: z.boolean().optional(),
+              frame: z.enum(["none", "label"]).optional(),
+              frameText: z.string().trim().max(40).optional(),
+            })
+            .partial()
+            .optional(),
           description: optStr(1000),
           tagline: optStr(120),
           social: socialSchema.optional(),
@@ -59,7 +80,16 @@ settingsRouter.patch("/company", async (req, res) => {
     }),
     req.body
   );
-  if (b.branding && (b.branding.primaryColor || b.branding.secondaryColor)) assertFeature(ent, "customBranding", "Custom brand colours");
+  if (b.branding && (b.branding.primaryColor || b.branding.secondaryColor || b.branding.qr)) assertFeature(ent, "customBranding", "Custom branding");
+  if (b.branding?.qr) {
+    const current = { ...DEFAULT_QR, ...(req.tenant.org.branding?.qr || {}), ...b.branding.qr };
+    if (contrastRatio(current.foreground, current.background) < 4.5) throw badRequest("These colours are too close; the QR code may not scan.");
+    const luminance = (hex) => {
+      const rgb = hex.slice(1).match(/.{2}/g).map((v) => parseInt(v, 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+    };
+    if (luminance(current.foreground) > luminance(current.background)) throw badRequest("These colours are too close; the QR code may not scan.");
+  }
   if (b.timezone) {
     try {
       new Intl.DateTimeFormat("en", { timeZone: b.timezone });
@@ -73,9 +103,10 @@ settingsRouter.patch("/company", async (req, res) => {
   if (b.timezone) org.timezone = b.timezone;
   if (b.contact) for (const [k, v] of Object.entries(b.contact)) if (v !== undefined) org.contact[k] = v;
   if (b.branding) {
-    const { social, ...rest } = b.branding;
+    const { social, qr, ...rest } = b.branding;
     for (const [k, v] of Object.entries(rest)) if (v !== undefined) org.branding[k] = v;
     if (social) for (const [k, v] of Object.entries(social)) if (v !== undefined) org.branding.social[k] = v;
+    if (qr) for (const [k, v] of Object.entries(qr)) if (v !== undefined) org.branding.qr[k] = v;
   }
   await org.save();
   audit(req, { action: "settings.company_updated", entity: "Organization", entityId: org._id, summary: Object.keys(b).join(", ") });

@@ -42,7 +42,7 @@ export function PublicCard({ card, source }: { card: CardPayload; source: string
           <div className="rounded-3xl bg-white p-6 text-center text-[#0F172A] shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
             <div className="text-[11px] font-bold tracking-[0.08em] text-[#5B6475] uppercase">Open on your phone</div>
             <div className="mt-3">
-              <QrBlock url={card.url} fileName={card.slug} size={190} />
+              <QrBlock url={card.url} fileName={card.slug} size={190} style={{ ...card.company.qr, logoUrl: card.company.logoUrl }} name={card.employee.name} />
             </div>
             <p className="mt-3 text-[12px] text-[#5B6475]">Scan with your phone camera to save {card.employee.firstName} to your contacts.</p>
           </div>

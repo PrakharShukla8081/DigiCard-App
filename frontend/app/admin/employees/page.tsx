@@ -3,24 +3,42 @@
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
-import QRCode from "qrcode";
 import { Download, ExternalLink, FileSpreadsheet, Link2, Pencil, Plus, QrCode, Search, Users } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useDebounced, useLoad } from "@/lib/hooks";
 import { copyText, fmtNum } from "@/lib/utils";
 import type { Employee } from "@/lib/types";
+import { qrPng, qrSvg } from "@/lib/qr";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
 import { CardStatusChips } from "@/components/admin/card-status";
 import { Avatar, Chip, Empty, ErrorBox, PageHeader, Pagination, Panel, Skeleton, Table, Td, Th, useConfirm } from "@/components/ui/misc";
 
 async function downloadQr(e: Employee) {
-  const src = await QRCode.toDataURL(`${e.url}?src=qr`, { width: 800, margin: 2 });
-  const a = document.createElement("a");
-  a.href = src;
-  a.download = `${e.employeeCode}-${e.slug}-qr.png`;
-  a.click();
+  try {
+    const src = await qrPng(e.url, e.qr, 1024, () => toast.warning("The logo couldn't be loaded; the QR code was downloaded without it."));
+    const a = document.createElement("a");
+    a.href = src;
+    a.download = `${e.slug}-qr.png`;
+    a.click();
+  } catch (e) {
+    toast.error(errMsg(e));
+  }
+}
+
+async function downloadQrSvg(e: Employee) {
+  try {
+    const svg = await qrSvg(e.url, e.qr, () => toast.warning("The logo couldn't be loaded; the QR code was downloaded without it."));
+    const objectUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = `${e.slug}-qr.svg`;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  } catch (e) {
+    toast.error(errMsg(e));
+  }
 }
 
 export default function EmployeesPage() {
@@ -253,8 +271,11 @@ export default function EmployeesPage() {
                         >
                           <Link2 />
                         </Button>
-                        <Button size="icon-sm" variant="ghost" title="Download QR" aria-label={`Download QR for ${e.name}`} onClick={() => downloadQr(e)}>
+                        <Button size="icon-sm" variant="ghost" title="Download QR PNG" aria-label={`Download QR PNG for ${e.name}`} onClick={() => downloadQr(e)}>
                           <QrCode />
+                        </Button>
+                        <Button size="icon-sm" variant="ghost" title="Download QR SVG" aria-label={`Download QR SVG for ${e.name}`} onClick={() => downloadQrSvg(e)}>
+                          <Download />
                         </Button>
                         <Button size="icon-sm" variant="ghost" asChild title="Open card" aria-label={`Open card of ${e.name}`}>
                           <a href={e.url} target="_blank" rel="noopener noreferrer">

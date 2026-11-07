@@ -32,6 +32,7 @@ export type CardPayload = {
     email: string;
     phone: string;
     address: string;
+    qr?: QrStyle;
   };
   verified: { isVerified: boolean; verifiedAt: string | null };
   content: {
@@ -39,7 +40,18 @@ export type CardPayload = {
     gallery: { id: string; title: string; imageUrl: string }[];
     videos: { id: string; title: string; youtubeId: string; url: string }[];
   };
+
   poweredBy: string;
+};
+
+export type QrStyle = {
+  foreground: string;
+  background: string;
+  useLogo: boolean;
+  frame: "none" | "label";
+  frameText: string;
+  logoUrl?: string;
+  name?: string;
 };
 
 export type Employee = {
@@ -71,6 +83,7 @@ export type Employee = {
   login: { status: "invited" | "active" | "disabled"; lastLoginAt: string | null; invitedAt: string | null } | null;
   createdAt: string;
   card?: CardPayload;
+  qr?: QrStyle;
 };
 
 export type Plan = {

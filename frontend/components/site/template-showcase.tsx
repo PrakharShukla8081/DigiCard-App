@@ -14,7 +14,7 @@ const SAMPLE: CardPayload = {
   sections: { about: true, contact: true, social: true, products: true, gallery: false, videos: false, companyInfo: true, enquiry: true, qr: true },
   employee: { name: "Rahul Sharma", firstName: "Rahul", designation: "Senior Sales Manager", department: "Sales", email: "rahul@example.com", mobile: "+919876543210", whatsapp: "+919876543210", photoUrl: "", bio: "Helping engineering teams find practical solutions for their next project.", location: "Pune, India", website: "veltrix.example" },
   social: { linkedin: "linkedin.com/in/rahul-sharma" },
-  company: { name: "Veltrix Engineering", privacyPolicyUrl: "", logoUrl: "", primaryColor: "#4F46E5", secondaryColor: "#10B981", description: "", tagline: "", website: "veltrix.example", email: "", phone: "", address: "" },
+  company: { name: "Veltrix Engineering", privacyPolicyUrl: "", logoUrl: "", primaryColor: "#4F46E5", secondaryColor: "#10B981", description: "", tagline: "", website: "veltrix.example", email: "", phone: "", address: "", qr: { foreground: "#111827", background: "#FFFFFF", useLogo: true, frame: "none", frameText: "Scan to save my contact" } },
   verified: { isVerified: false, verifiedAt: null },
   content: { products: [{ id: "sample-1", title: "Industrial automation", description: "Practical systems for growing teams.", imageUrl: "", url: "" }, { id: "sample-2", title: "Engineering support", description: "Advice from first brief to delivery.", imageUrl: "", url: "" }], gallery: [], videos: [] },
   poweredBy: "Beno Digital Card",

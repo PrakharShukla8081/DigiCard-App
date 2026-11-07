@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import QRCode from "qrcode";
-import type { CardPayload } from "@/lib/types";
+import { useEffect, useMemo, useState } from "react";
+import type { CardPayload, QrStyle } from "@/lib/types";
+import { qrPng } from "@/lib/qr";
 import { httpUrl, inkFor, initials } from "@/lib/utils";
 import { I } from "./icons";
 import "./card.css";
@@ -18,17 +18,17 @@ export function waLink(num: string, text?: string) {
 
 const SOCIAL_KEYS = ["linkedin", "instagram", "facebook", "youtube", "twitter"] as const;
 
-function useQr(url: string) {
+function useQr(url: string, style?: Partial<QrStyle>) {
   const [src, setSrc] = useState("");
   useEffect(() => {
     let alive = true;
-    QRCode.toDataURL(`${url}?src=qr`, { width: 360, margin: 1, errorCorrectionLevel: "M" })
+    qrPng(url, style, 360)
       .then((s) => alive && setSrc(s))
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [url]);
+  }, [url, style]);
   return src;
 }
 
@@ -41,7 +41,8 @@ export function CardView({ card, mode = "public", onTrack, source = "direct" }: 
   const c = card.company;
   const sec = card.sections;
   const preview = mode === "preview";
-  const qr = useQr(card.url);
+  const qrStyle = useMemo(() => ({ ...(card.company.qr || {}), logoUrl: card.company.logoUrl, name: card.employee.name }), [card.company.qr, card.company.logoUrl, card.employee.name]);
+  const qr = useQr(card.url, qrStyle);
   const track: Track = (t, m) => !preview && onTrack?.(t, m);
   const guard = (ev: React.MouseEvent) => {
     if (preview) ev.preventDefault();

@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import mongoose from "mongoose";
-import QRCode from "qrcode";
 import { ZipArchive } from "archiver";
 import { Employee, User, RefreshToken } from "../../models/index.js";
 import { parse, assertId, emailSchema, phoneSchema, urlish, optStr, pageParams, escapeRegex, normalizePhone, objectId } from "../../common/validate.js";
@@ -15,6 +14,9 @@ import { imageUpload } from "../../middleware/upload.js";
 import { issueInvite } from "../../services/invites.js";
 import { audit } from "../../services/audit.js";
 import { cardUrl, fullName, buildCardPayload, loadCardContent } from "../../services/cards.js";
+import { qrStyle, renderQrSvg } from "../../services/qr.js";
+import { readStoredImage, sniffImage } from "../../storage/index.js";
+import { logger } from "../../common/logger.js";
 
 const router = Router();
 
@@ -40,7 +42,8 @@ const empBody = z.object({
 });
 
 /** Shape returned to the admin UI. */
-export function employeeDto(e, org) {
+export function employeeDto(e, org, ent) {
+  const customBranding = Boolean(ent?.features?.customBranding);
   return {
     _id: e._id,
     employeeCode: e.employeeCode,
@@ -70,6 +73,7 @@ export function employeeDto(e, org) {
     login: e._login || null,
     createdAt: e.createdAt,
     updatedAt: e.updatedAt,
+    qr: { ...qrStyle(org, ent), logoUrl: customBranding ? org.branding?.logoUrl || "" : "", name: fullName(e) },
   };
 }
 
@@ -109,7 +113,7 @@ router.get("/", async (req, res) => {
   const sort = SORTS[req.query.sort] || SORTS.newest;
   const [items, total] = await Promise.all([Employee.find(f).sort(sort).skip(skip).limit(limit).lean(), Employee.countDocuments(f)]);
   await attachLogins(org._id, items);
-  res.json({ success: true, data: items.map((e) => employeeDto(e, org)), pagination: { page, limit, total } });
+  res.json({ success: true, data: items.map((e) => employeeDto(e, org, req.tenant.ent)), pagination: { page, limit, total } });
 });
 
 router.get("/departments", async (req, res) => {
@@ -130,25 +134,40 @@ router.get("/export.csv", async (req, res) => {
   res.send(csv);
 });
 
-/* ───── bulk QR ZIP (one PNG per employee) ───── */
-router.get("/qr.zip", async (req, res) => {
+/* ───── bulk QR ZIP (one branded SVG per active employee) ───── */
+async function qrExport(req, res) {
   const { org } = req.tenant;
-  const f = buildFilter(org._id, req.query);
+  const f = { ...buildFilter(org._id, req.query), cardStatus: "active" };
   if (req.query.ids && typeof req.query.ids === "string") f._id = { $in: req.query.ids.split(",").filter((i) => mongoose.isValidObjectId(i)) };
-  const items = await Employee.find(f).select("employeeCode firstName lastName slug").sort({ employeeCode: 1 }).lean();
+  const items = await Employee.find(f).select("employeeCode firstName lastName slug").sort({ employeeCode: 1 }).limit(5000).lean();
   if (!items.length) throw badRequest("No employees match this selection.");
   res.setHeader("Content-Type", "application/zip");
   res.setHeader("Content-Disposition", `attachment; filename="${org.slug}-qr-codes.zip"`);
   const zip = new ZipArchive({ zlib: { level: 6 } });
   zip.on("error", (e) => res.destroy(e));
   zip.pipe(res);
+  let logoData = null;
+  const style = qrStyle(org, req.tenant.ent);
+  if (style.useLogo && org.branding.logoKey && req.tenant.ent.features.customBranding) {
+    try {
+      const logo = await readStoredImage(org.branding.logoKey, org.branding.logoUrl);
+      const type = sniffImage(logo);
+      if (type) logoData = `data:${type.mime};base64,${logo.toString("base64")}`;
+      else logger.warn("QR export could not read the stored company logo; continuing without it.");
+    } catch (e) {
+      logger.warn("QR export could not read the stored company logo; continuing without it:", e.message);
+    }
+  }
   for (const e of items) {
-    const png = await QRCode.toBuffer(`${cardUrl(org.slug, e.slug)}?src=qr`, { width: 800, margin: 2, errorCorrectionLevel: "M" });
+    const svg = await renderQrSvg(cardUrl(org.slug, e.slug), style, { logoData, name: fullName(e) });
     const safeCode = String(e.employeeCode).replace(/[^\w.-]/g, "_");
-    zip.append(png, { name: `${safeCode}-${e.slug}.png` });
+    zip.append(svg, { name: `${safeCode}-${e.slug}.svg` });
   }
   await zip.finalize();
-});
+}
+
+router.get("/qr.zip", qrExport);
+router.get("/qr-export", qrExport);
 
 /* ───── create ───── */
 router.post("/", async (req, res) => {
@@ -172,7 +191,7 @@ router.post("/", async (req, res) => {
     publishedAt: isPublished ? new Date() : null,
   });
   audit(req, { action: "employee.created", entity: "Employee", entityId: emp._id, summary: `${fullName(emp)} (${emp.employeeCode})` });
-  res.status(201).json({ success: true, data: employeeDto(emp.toObject(), org) });
+  res.status(201).json({ success: true, data: employeeDto(emp.toObject(), org, req.tenant.ent) });
 });
 
 async function loadEmployee(req) {
@@ -189,7 +208,7 @@ router.get("/:id", async (req, res) => {
   const obj = e.toObject();
   await attachLogins(org._id, [obj]);
   const card = await buildCardPayload({ org, employee: obj, ent, content: await loadCardContent(org._id, ent) });
-  res.json({ success: true, data: { ...employeeDto(obj, org), card } });
+  res.json({ success: true, data: { ...employeeDto(obj, org, req.tenant.ent), card } });
 });
 
 /* ───── update ───── */
@@ -216,7 +235,7 @@ router.patch("/:id", async (req, res) => {
   if (b.isPublished === true && !e.publishedAt) e.publishedAt = new Date();
   await e.save();
   audit(req, { action: "employee.updated", entity: "Employee", entityId: e._id, summary: `${fullName(e)} (${Object.keys(b).join(", ")})` });
-  res.json({ success: true, data: employeeDto(e.toObject(), org) });
+  res.json({ success: true, data: employeeDto(e.toObject(), org, req.tenant.ent) });
 });
 
 /* ───── delete ───── */

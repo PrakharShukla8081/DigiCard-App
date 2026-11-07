@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { useLoad } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 import type { CardPayload } from "@/lib/types";
+import { qrDefaults, qrPng } from "@/lib/qr";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Field, Input, Textarea } from "@/components/ui/field";
 import { ErrorBox, PageHeader, PageLoader, Panel, PanelHeader, Segmented, ToggleRow } from "@/components/ui/misc";
@@ -19,7 +20,7 @@ type Settings = {
   slug: string;
   privacyPolicyUrl: string;
   contact: { email: string; phone: string; website: string; address: string; gstin: string };
-  branding: { logoUrl: string; primaryColor: string; secondaryColor: string; description: string; tagline: string; social: Record<string, string> };
+  branding: { logoUrl: string; primaryColor: string; secondaryColor: string; description: string; tagline: string; social: Record<string, string>; qr: ReturnType<typeof qrDefaults> };
   cardSettings: { template: string; allowEmployeeTemplate: boolean; sections: Record<string, boolean>; employeeEditableFields: string[]; allowEmployeeLogin: boolean };
 };
 
@@ -66,6 +67,23 @@ const FIELDS: [string, string][] = [
   ["twitter", "X (Twitter)"],
 ];
 
+function qrLuminance(hex: string) {
+  const rgb = hex.slice(1).match(/.{2}/g)?.map((v) => parseInt(v, 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)) || [0, 0, 0];
+  return 0.2126 * rgb[0]! + 0.7152 * rgb[1]! + 0.0722 * rgb[2]!;
+}
+function qrContrast(foreground: string, background: string) {
+  const a = qrLuminance(foreground);
+  const b = qrLuminance(background);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+function QrPreview({ url, style }: { url: string; style: ReturnType<typeof qrDefaults> & { logoUrl?: string } }) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    qrPng(url, style, 260).then(setSrc).catch(() => setSrc(""));
+  }, [url, style]);
+  return <div className="mt-3 flex min-h-40 items-center justify-center rounded-xl border border-line bg-surface p-3">{src && <img src={src} alt="QR code preview" className="size-40 object-contain" />}</div>;
+}
+
 export default function BrandingPage() {
   const { hasFeature, reload: reloadSession } = useAuth();
   const { data, error, loading, reload } = useLoad(async () => {
@@ -79,7 +97,7 @@ export default function BrandingPage() {
   const custom = hasFeature("customBranding");
 
   useEffect(() => {
-    if (data) setS(data.settings);
+    if (data) setS({ ...data.settings, branding: { ...data.settings.branding, qr: qrDefaults(data.settings.branding.qr) } });
   }, [data]);
 
   const preview = useMemo<CardPayload | null>(() => {
@@ -110,16 +128,22 @@ export default function BrandingPage() {
         email: s.contact.email,
         phone: s.contact.phone,
         address: s.contact.address,
+        qr: custom ? { ...s.branding.qr, logoUrl: s.branding.logoUrl } : qrDefaults(),
       },
       social: { ...b.social, ...Object.fromEntries(Object.entries(s.branding.social || {}).filter(([, v]) => v)) },
     };
   }, [data, s, custom, hasFeature]);
+  const qrPreviewStyle = useMemo(
+    () => s ? { ...(custom ? s.branding.qr : qrDefaults()), logoUrl: custom ? s.branding.logoUrl : "", name: data?.base.employee.name } : qrDefaults(),
+    [s, custom, data],
+  );
 
   if (loading && !data) return <PageLoader />;
   if (error) return <ErrorBox message={error} onRetry={reload} />;
   if (!s || !preview) return null;
 
   const setB = (patch: Partial<Settings["branding"]>) => setS({ ...s, branding: { ...s.branding, ...patch } });
+  const setQr = (patch: Partial<Settings["branding"]["qr"]>) => setB({ qr: { ...s.branding.qr, ...patch } });
   const setC = (patch: Partial<Settings["contact"]>) => setS({ ...s, contact: { ...s.contact, ...patch } });
   const setCard = (patch: Partial<Settings["cardSettings"]>) => setS({ ...s, cardSettings: { ...s.cardSettings, ...patch } });
 
@@ -128,6 +152,7 @@ export default function BrandingPage() {
     try {
       const branding: Record<string, unknown> = { description: s!.branding.description, tagline: s!.branding.tagline, social: s!.branding.social };
       if (custom) Object.assign(branding, { primaryColor: s!.branding.primaryColor, secondaryColor: s!.branding.secondaryColor });
+      if (custom) branding.qr = s!.branding.qr;
       await api.patch("/org/settings/company", { name: s!.name, privacyPolicyUrl: s!.privacyPolicyUrl, contact: s!.contact, branding });
       const card: Record<string, unknown> = {
         sections: s!.cardSettings.sections,
@@ -254,6 +279,26 @@ export default function BrandingPage() {
                   ))}
                 </div>
               </div>
+            </div>
+            <div className={cn("border-t border-line px-5 py-5", !custom && "pointer-events-none opacity-50")}>
+              <PanelHeader title="QR style" sub="Branded QR codes use the card URL with the existing QR tracking parameter." />
+              <QrPreview style={qrPreviewStyle} url={preview.url} />
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                {(["foreground", "background"] as const).map((key) => (
+                  <label key={key} className="flex items-center gap-2 text-[12px] font-semibold text-muted">
+                    {key === "foreground" ? "Foreground" : "Background"}
+                    <input type="color" value={s.branding.qr[key]} onChange={(e) => setQr({ [key]: e.target.value.toUpperCase() })} className="h-8 w-10 cursor-pointer rounded-lg border border-line bg-surface p-0.5" />
+                    <code className="font-mono">{s.branding.qr[key]}</code>
+                  </label>
+                ))}
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-4">
+                <ToggleRow title="Use company logo" checked={s.branding.qr.useLogo} onChange={(v) => setQr({ useLogo: v })} />
+                <Segmented label="Frame" value={s.branding.qr.frame} onChange={(v) => setQr({ frame: v as "none" | "label" })} options={[{ value: "none", label: "None" }, { value: "label", label: "Label" }]} />
+              </div>
+              {s.branding.qr.frame === "label" && <Field label="Frame text" hint="Up to 40 characters"><Input maxLength={40} value={s.branding.qr.frameText} onChange={(e) => setQr({ frameText: e.target.value })} /></Field>}
+              {(qrContrast(s.branding.qr.foreground, s.branding.qr.background) < 4.5 || qrLuminance(s.branding.qr.foreground) > qrLuminance(s.branding.qr.background)) && <p className="mt-3 rounded-lg bg-warn-soft px-3 py-2 text-[12px] font-semibold text-warn">These colours are too close; the QR code may not scan.</p>}
+              <Button size="sm" variant="ghost" className="mt-3" onClick={() => setB({ qr: qrDefaults() })}>Reset QR style</Button>
             </div>
           </Panel>
 

@@ -1,5 +1,6 @@
 import { env } from "../config/env.js";
 import { ContentItem, getPlatformSettings } from "../models/index.js";
+import { DEFAULT_QR } from "./qr.js";
 
 export const fullName = (e) => [e.firstName, e.lastName].filter(Boolean).join(" ");
 export const cardUrl = (orgSlug, empSlug) => `${env.publicCardBaseUrl}/c/${orgSlug}/${empSlug}`;
@@ -64,6 +65,7 @@ export async function buildCardPayload({ org, employee, ent, content }) {
       name: org.name,
       privacyPolicyUrl: org.privacyPolicyUrl || "",
       logoUrl: custom ? b.logoUrl : "",
+      qr: custom ? { ...DEFAULT_QR, ...(b.qr || {}) } : DEFAULT_QR,
       primaryColor: custom ? b.primaryColor || "#4F46E5" : "#4F46E5",
       secondaryColor: custom ? b.secondaryColor || "#10B981" : "#10B981",
       description: b.description || "",

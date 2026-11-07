@@ -6,6 +6,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { inflateRawSync } from "node:zlib";
 
 process.env.NODE_ENV = "test";
 if (process.env.TEST_FERRETDB) process.env.AGG_SINGLE_ACCUMULATOR = "1";
@@ -57,6 +58,39 @@ function client() {
     put: (p, b) => call("PUT", p, b),
     del: (p) => call("DELETE", p),
   };
+}
+
+function zipEntries(buffer) {
+  const endMin = Math.max(0, buffer.length - 65557);
+  let end = -1;
+  for (let i = buffer.length - 22; i >= endMin; i--) {
+    if (buffer.readUInt32LE(i) === 0x06054b50) {
+      end = i;
+      break;
+    }
+  }
+  assert.notEqual(end, -1, "ZIP end record exists");
+  const count = buffer.readUInt16LE(end + 10);
+  let offset = buffer.readUInt32LE(end + 16);
+  const entries = [];
+  for (let i = 0; i < count; i++) {
+    assert.equal(buffer.readUInt32LE(offset), 0x02014b50, "ZIP entry exists");
+    const method = buffer.readUInt16LE(offset + 10);
+    const compressedSize = buffer.readUInt32LE(offset + 20);
+    const nameLength = buffer.readUInt16LE(offset + 28);
+    const extraLength = buffer.readUInt16LE(offset + 30);
+    const commentLength = buffer.readUInt16LE(offset + 32);
+    const localOffset = buffer.readUInt32LE(offset + 42);
+    const name = buffer.toString("utf8", offset + 46, offset + 46 + nameLength);
+    const localNameLength = buffer.readUInt16LE(localOffset + 26);
+    const localExtraLength = buffer.readUInt16LE(localOffset + 28);
+    const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+    const compressed = buffer.subarray(dataStart, dataStart + compressedSize);
+    const content = method === 8 ? inflateRawSync(compressed) : compressed;
+    entries.push({ name, content: content.toString("utf8") });
+    offset += 46 + nameLength + extraLength + commentLength;
+  }
+  return entries;
 }
 
 const tokenFromLink = (link) => decodeURIComponent(link.split("token=")[1]);
@@ -209,6 +243,51 @@ test("features outside the plan are blocked", async () => {
   assert.equal(r.status, 403);
   const c = await adminB.patch("/api/org/settings/card", { template: "executive" });
   assert.equal(c.status, 403);
+});
+
+test("QR branding validates colours and requires custom branding", async () => {
+  const invalidHex = await adminA.patch("/api/org/settings/company", { branding: { qr: { foreground: "navy" } } });
+  assert.equal(invalidHex.status, 400);
+  const lightForeground = await adminA.patch("/api/org/settings/company", { branding: { qr: { foreground: "#FFFFFF", background: "#111827" } } });
+  assert.equal(lightForeground.status, 400);
+  assert.equal(lightForeground.message, "These colours are too close; the QR code may not scan.");
+  const lowContrast = await adminA.patch("/api/org/settings/company", { branding: { qr: { foreground: "#111827", background: "#121827" } } });
+  assert.equal(lowContrast.status, 400);
+
+  const denied = await adminB.patch("/api/org/settings/company", { branding: { qr: { foreground: "#000000" } } });
+  assert.equal(denied.status, 403);
+  const defaultCard = await anon.get("/api/public/cards/xyz-company/mohit");
+  assert.deepEqual(defaultCard.data.company.qr, {
+    foreground: "#111827",
+    background: "#FFFFFF",
+    useLogo: true,
+    frame: "none",
+    frameText: "Scan to save my contact",
+  });
+});
+
+test("bulk QR SVG export is tenant-scoped and encodes tracked card URLs", async () => {
+  const updated = await adminA.patch("/api/org/settings/company", {
+    branding: { qr: { foreground: "#000000", background: "#FFFFFF", frame: "label", frameText: "Scan to connect" } },
+  });
+  assert.equal(updated.status, 200, updated.message);
+
+  const exportA = await adminA.get("/api/org/employees/qr-export", { raw: true });
+  assert.equal(exportA.status, 200);
+  assert.match(exportA.headers.get("content-type"), /application\/zip/);
+  const entriesA = zipEntries(Buffer.from(await exportA.arrayBuffer()));
+  assert.equal(entriesA.length, 1);
+  assert.match(entriesA[0].content, /http:\/\/localhost:3000\/c\/abc-company\/rahul-sharma\?src=qr/);
+  assert.match(entriesA[0].content, /Scan to connect/);
+  assert.doesNotMatch(entriesA[0].content, /xyz-company/);
+
+  const exportB = await adminB.get("/api/org/employees/qr-export", { raw: true });
+  assert.equal(exportB.status, 200);
+  const entriesB = zipEntries(Buffer.from(await exportB.arrayBuffer()));
+  assert.equal(entriesB.length, 2);
+  assert.ok(entriesB.some((entry) => /\/c\/xyz-company\/mohit\?src=qr/.test(entry.content)));
+  assert.ok(entriesB.every((entry) => !entry.content.includes("abc-company")));
+  assert.ok(entriesB.every((entry) => !entry.content.includes("Scan to connect")));
 });
 
 test("bulk import validates rows, detects duplicates and reports errors", async () => {

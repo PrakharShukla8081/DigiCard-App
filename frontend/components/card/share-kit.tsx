@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import QRCode from "qrcode";
 import { toast } from "sonner";
 import { Copy, Image as ImageIcon, Mail, Share2 } from "lucide-react";
 import type { CardPayload } from "@/lib/types";
 import { copyText, httpUrl } from "@/lib/utils";
+import { qrPng } from "@/lib/qr";
 import { Button } from "@/components/ui/button";
 import { Panel, PanelHeader } from "@/components/ui/misc";
 import { I } from "./icons";
@@ -72,7 +72,12 @@ async function virtualBackground(card: CardPayload) {
   g.fillStyle = "rgba(255,255,255,0.75)";
   g.font = "500 28px Manrope, Arial, sans-serif";
   g.fillText(card.company.name, x, 256);
-  const qr = await QRCode.toDataURL(`${card.url}?src=qr`, { width: 300, margin: 1 });
+  const qr = await qrPng(
+    card.url,
+    { ...card.company.qr, logoUrl: card.company.logoUrl, name: card.employee.name },
+    1024,
+    () => toast.warning("The logo couldn't be loaded; the QR code in the background was created without it."),
+  );
   const img = new Image();
   img.src = qr;
   await img.decode();
@@ -129,6 +134,8 @@ export function ShareKit({ card }: { card: CardPayload }) {
             setBusy(true);
             try {
               await virtualBackground(card);
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : "Could not create the virtual background.");
             } finally {
               setBusy(false);
             }

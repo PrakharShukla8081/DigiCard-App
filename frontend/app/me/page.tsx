@@ -101,7 +101,7 @@ export default function MyCardPage() {
           <ShareKit card={card} />
           <Panel className="p-5">
             <div className="grid items-center gap-5 sm:grid-cols-[auto_minmax(0,1fr)]">
-              <QrBlock url={e.url} fileName={e.slug} size={150} />
+              <QrBlock url={e.url} fileName={e.slug} size={150} style={{ ...card.company.qr, logoUrl: card.company.logoUrl }} name={card.employee.name} />
               <div className="flex min-w-0 flex-col gap-2">
                 <div className="eyebrow">Your permanent card link</div>
                 <CopyField value={e.url} />

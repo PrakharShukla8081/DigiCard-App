@@ -361,7 +361,7 @@ export function EmployeeEditor({ employee, base, onSaved }: { employee?: Employe
                 </Button>
               </div>
               <Panel className="p-4">
-                <QrBlock url={employee!.url} fileName={`${employee!.employeeCode}-${employee!.slug}`} size={160} />
+                <QrBlock url={employee!.url} fileName={employee!.slug} size={160} style={employee?.qr} name={employee!.name} />
               </Panel>
               <Panel className="p-4">
                 <div className="eyebrow mb-2">Card activity (all time)</div>

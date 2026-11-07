@@ -117,4 +117,55 @@ export async function uploadBufferToCloudinary(buf, folder) {
   return cloudinary.save(buf, folder, t.ext, t.mime);
 }
 
+/** Read an image previously stored by this adapter, with caller-enforced limits. */
+export async function readStoredImage(key, url, { maxBytes = 2 * 1024 * 1024, timeoutMs = 5000 } = {}) {
+  if (!key) return null;
+  const i = key.indexOf(":");
+  if (i < 1) return null;
+  const driver = key.slice(0, i);
+  const id = key.slice(i + 1);
+  if (driver === "local") {
+    const root = path.resolve(env.uploadDir);
+    const abs = path.resolve(root, id);
+    if (!abs.startsWith(root + path.sep)) return null;
+    const stat = await fs.stat(abs);
+    if (stat.size > maxBytes) return null;
+    const buf = await fs.readFile(abs);
+    return buf.length <= maxBytes ? buf : null;
+  }
+  if (driver === "cloudinary" && url) {
+    const parsedUrl = new URL(url);
+    if (
+      parsedUrl.protocol !== "https:" ||
+      parsedUrl.hostname !== "res.cloudinary.com" ||
+      !env.cloudinary.cloudName ||
+      !parsedUrl.pathname.startsWith(`/${env.cloudinary.cloudName}/image/upload/`)
+    ) return null;
+    const res = await fetch(parsedUrl, { signal: AbortSignal.timeout(timeoutMs), redirect: "error" });
+    if (!res.ok) return null;
+    const len = Number(res.headers.get("content-length") || 0);
+    if (len > maxBytes) return null;
+    if (!res.body) return null;
+    const reader = res.body.getReader();
+    const chunks = [];
+    let total = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > maxBytes) {
+          await reader.cancel();
+          return null;
+        }
+        chunks.push(Buffer.from(value));
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    return Buffer.concat(chunks, total);
+  }
+  return null;
+}
+
 export { local as _localDriver };
