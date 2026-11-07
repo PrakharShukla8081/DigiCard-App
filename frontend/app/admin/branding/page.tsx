@@ -17,6 +17,7 @@ import { PhoneFrame } from "@/components/card/phone-frame";
 type Settings = {
   name: string;
   slug: string;
+  privacyPolicyUrl: string;
   contact: { email: string; phone: string; website: string; address: string; gstin: string };
   branding: { logoUrl: string; primaryColor: string; secondaryColor: string; description: string; tagline: string; social: Record<string, string> };
   cardSettings: { template: string; allowEmployeeTemplate: boolean; sections: Record<string, boolean>; employeeEditableFields: string[]; allowEmployeeLogin: boolean };
@@ -99,6 +100,7 @@ export default function BrandingPage() {
       company: {
         ...b.company,
         name: s.name,
+        privacyPolicyUrl: s.privacyPolicyUrl,
         logoUrl: custom ? s.branding.logoUrl : "",
         primaryColor: custom ? s.branding.primaryColor : "#4F46E5",
         secondaryColor: custom ? s.branding.secondaryColor : "#10B981",
@@ -126,7 +128,7 @@ export default function BrandingPage() {
     try {
       const branding: Record<string, unknown> = { description: s!.branding.description, tagline: s!.branding.tagline, social: s!.branding.social };
       if (custom) Object.assign(branding, { primaryColor: s!.branding.primaryColor, secondaryColor: s!.branding.secondaryColor });
-      await api.patch("/org/settings/company", { name: s!.name, contact: s!.contact, branding });
+      await api.patch("/org/settings/company", { name: s!.name, privacyPolicyUrl: s!.privacyPolicyUrl, contact: s!.contact, branding });
       const card: Record<string, unknown> = {
         sections: s!.cardSettings.sections,
         employeeEditableFields: s!.cardSettings.employeeEditableFields,
@@ -266,6 +268,9 @@ export default function BrandingPage() {
               </Field>
               <Field label="Website">
                 <Input value={s.contact.website} onChange={(e) => setC({ website: e.target.value })} placeholder="www.company.com" />
+              </Field>
+              <Field label="Privacy policy URL (optional)" className="sm:col-span-2" hint="Use an HTTPS link. Visitors will see it below the enquiry consent checkbox.">
+                <Input type="url" value={s.privacyPolicyUrl} onChange={(e) => setS({ ...s, privacyPolicyUrl: e.target.value })} placeholder="https://example.com/privacy" />
               </Field>
               <Field label="Company email">
                 <Input type="email" value={s.contact.email} onChange={(e) => setC({ email: e.target.value })} />

@@ -282,7 +282,7 @@ test("xlsx template downloads and imports", async () => {
 });
 
 test("public card shows only whitelisted data and tracks events", async () => {
-  await adminA.patch("/api/org/settings/company", { branding: { primaryColor: "#0E7490" }, contact: { website: "www.abc.test" } });
+  await adminA.patch("/api/org/settings/company", { branding: { primaryColor: "#0E7490" }, contact: { website: "www.abc.test" }, privacyPolicyUrl: "https://abc.test/privacy" });
   await adminA.post("/api/org/content", { kind: "product", title: "Pumps", description: "Industrial" });
   await adminA.post("/api/org/content", { kind: "video", title: "Intro", url: "https://youtu.be/aqz-KE-bpKQ" });
   const r = await anon.get("/api/public/cards/abc-company/rahul-sharma");
@@ -290,6 +290,7 @@ test("public card shows only whitelisted data and tracks events", async () => {
   const c = r.data;
   assert.equal(c.employee.name, "Rahul Sharma");
   assert.equal(c.company.primaryColor, "#0E7490");
+  assert.equal(c.company.privacyPolicyUrl, "https://abc.test/privacy");
   assert.equal(c.content.products.length, 1);
   assert.equal(c.content.videos[0].youtubeId, "aqz-KE-bpKQ");
   const json = JSON.stringify(c);
@@ -303,8 +304,10 @@ test("public card shows only whitelisted data and tracks events", async () => {
   const q = await anon.get("/api/public/cards/abc-company/rahul-sharma/qr.png", { raw: true });
   assert.equal(q.headers.get("content-type"), "image/png");
 
-  const enq = await anon.post("/api/public/enquiries", { orgSlug: "abc-company", slug: "rahul-sharma", name: "Visitor", phone: "9876512345", message: "Need pumps" });
-  assert.equal(enq.status, 201, enq.message);
+  const missingConsent = await anon.post("/api/public/enquiries", { orgSlug: "abc-company", slug: "rahul-sharma", name: "Visitor", phone: "9876512345", message: "Need pumps" });
+  assert.equal(missingConsent.status, 400);
+  const enq = await anon.post("/api/public/enquiries", { orgSlug: "abc-company", slug: "rahul-sharma", name: "Visitor", phone: "9876512345", message: "Need pumps", consent: true });
+  assert.equal(enq.status, 201, JSON.stringify(enq));
   const honey = await anon.post("/api/public/enquiries", { orgSlug: "abc-company", slug: "rahul-sharma", name: "Bot", phone: "9876512345", website: "spam" });
   assert.equal(honey.status, 201);
 
@@ -317,10 +320,36 @@ test("public card shows only whitelisted data and tracks events", async () => {
   assert.equal(a.data.employees[0].name, "Rahul Sharma");
   const enquiries = await adminA.get("/api/org/enquiries");
   assert.equal(enquiries.data.length, 1, "honeypot enquiry dropped");
+  assert.equal(enquiries.data[0].consent, true);
+  assert.match(enquiries.data[0].consentText, /ABC Company/);
+  assert.ok(enquiries.data[0].consentAt);
+  const exportResponse = await adminA.get("/api/org/enquiries/export.csv", { raw: true });
+  assert.match(await exportResponse.text(), /Consent,Consent at/);
   // B cannot see A's enquiries or analytics
   assert.equal((await adminB.get("/api/org/enquiries")).data.length, 0);
   assert.equal((await adminB.get("/api/org/analytics?range=7d")).data.totals.view, 0);
   assert.equal((await adminB.patch(`/api/org/enquiries/${enquiries.data[0]._id}`, { status: "closed" })).status, 404);
+});
+
+test("privacy policy and verification stay scoped to their owners", async () => {
+  assert.equal((await adminA.patch("/api/org/settings/company", { privacyPolicyUrl: "http://abc.test/privacy" })).status, 400);
+  assert.equal((await adminA.patch("/api/org/settings/company", { privacyPolicyUrl: "javascript:alert(1)" })).status, 400);
+  assert.equal((await adminA.patch("/api/org/settings/company", { verification: { isVerified: true } })).status, 200);
+  assert.equal((await M.Organization.findById(orgA._id).lean()).verification.isVerified, false);
+
+  let r = await sa.patch(`/api/platform/organizations/${orgA._id}/verification`, { isVerified: true, note: "Documents reviewed" });
+  assert.equal(r.status, 200, r.message);
+  assert.ok(r.data.verifiedAt);
+  const card = await anon.get("/api/public/cards/abc-company/rahul-sharma");
+  assert.deepEqual(Object.keys(card.data.verified).sort(), ["isVerified", "verifiedAt"]);
+  assert.equal(card.data.verified.isVerified, true);
+  assert.equal((await adminA.patch(`/api/platform/organizations/${orgA._id}/verification`, { isVerified: false })).status, 403);
+  const audit = await sa.get("/api/platform/audit-logs?limit=100");
+  assert.ok(audit.data.some((a) => a.action === "organization.verified"));
+
+  r = await sa.patch(`/api/platform/organizations/${orgA._id}/verification`, { isVerified: false });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.verifiedAt, null);
 });
 
 test("unpublished / inactive cards are hidden", async () => {

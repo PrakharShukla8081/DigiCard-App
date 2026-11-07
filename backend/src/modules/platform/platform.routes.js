@@ -306,7 +306,7 @@ router.post("/organizations", async (req, res) => {
 
 router.get("/organizations/:id", async (req, res) => {
   assertId(req.params.id);
-  const org = await Organization.findById(req.params.id).lean();
+  const org = await Organization.findById(req.params.id).populate("verification.verifiedBy", "name email").lean();
   if (!org) throw notFound("Company not found.");
   const [subs, admins, employees, published, active] = await Promise.all([
     Subscription.find({ organizationId: org._id }).sort({ createdAt: -1 }).lean(),
@@ -324,6 +324,7 @@ router.get("/organizations/:id", async (req, res) => {
     shares: "$counts.share",
     enquiries: "$counts.enquiry",
   });
+
   res.json({
     success: true,
     data: {
@@ -333,6 +334,26 @@ router.get("/organizations/:id", async (req, res) => {
       usage: { employees, activeCards: active, publishedCards: published, last30Days: eng ? { views: eng.views, saves: eng.saves, shares: eng.shares, enquiries: eng.enquiries } : { views: 0, saves: 0, shares: 0, enquiries: 0 } },
     },
   });
+});
+
+router.patch("/organizations/:id/verification", async (req, res) => {
+  assertId(req.params.id);
+  const b = parse(z.object({ isVerified: z.boolean(), note: z.string().trim().max(300).optional() }), req.body);
+  const org = await Organization.findById(req.params.id);
+  if (!org) throw notFound("Company not found.");
+  org.verification.isVerified = b.isVerified;
+  org.verification.note = b.note || "";
+  org.verification.verifiedAt = b.isVerified ? new Date() : null;
+  org.verification.verifiedBy = b.isVerified ? req.auth.userId : null;
+  await org.save();
+  await audit(req, {
+    action: b.isVerified ? "organization.verified" : "organization.unverified",
+    entity: "Organization",
+    entityId: org._id,
+    summary: b.isVerified ? org.verification.note : org.name,
+    organizationId: null,
+  });
+  res.json({ success: true, data: { isVerified: org.verification.isVerified, verifiedAt: org.verification.verifiedAt, verifiedBy: org.verification.verifiedBy, note: org.verification.note } });
 });
 
 router.patch("/organizations/:id", async (req, res) => {

@@ -43,6 +43,7 @@ export const env = {
 
   encryptionKey: process.env.ENCRYPTION_KEY,
   internalApiKey: process.env.INTERNAL_API_KEY || "",
+  cronSecret: process.env.CRON_SECRET || "",
   jobsEnabled: bool(process.env.JOBS_ENABLED, true),
   defaultTimezone: process.env.DEFAULT_TIMEZONE || "Asia/Kolkata",
 };
@@ -56,6 +57,9 @@ export function assertEnv() {
   }
   if (env.jwtAccessSecret.length < 32) {
     throw new Error("JWT_ACCESS_SECRET must be at least 32 characters long.");
+  }
+  if (env.cronSecret && env.cronSecret.length < 32) {
+    throw new Error("CRON_SECRET must be at least 32 characters long when configured.");
   }
   if (env.encryptionKey && !/^[0-9a-fA-F]{64}$/.test(env.encryptionKey)) {
     throw new Error("ENCRYPTION_KEY must be 64 hex characters (32 bytes).");

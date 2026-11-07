@@ -18,6 +18,7 @@ type Dash = {
   recentEnquiries: { _id: string; name: string; employeeName: string; message: string; createdAt: string; status: string }[];
   recentActivity: { _id: string; actorName: string; action: string; summary: string; createdAt: string }[];
   subscription: { status: string; planName: string; endDate: string; employeeLimit: number | null };
+  organization: { isVerified: boolean; verifiedAt: string | null };
 };
 
 const SERIES = [
@@ -60,6 +61,11 @@ export default function AdminDashboard() {
           </>
         }
       />
+      {d.organization.isVerified ? (
+        <div className="mb-4"><Chip tone="ok">Verified company</Chip></div>
+      ) : (
+        <p className="mb-4 text-[13px] text-muted">Contact Beno to get your company verified.</p>
+      )}
       {e.total === 0 && (
         <Panel className="mb-4 flex flex-wrap items-center justify-between gap-3 border-accent/30 bg-accent-soft/40 p-5">
           <div>

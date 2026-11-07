@@ -39,6 +39,9 @@
 .vc-name { font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif; font-size: 24px; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
 .vc-role { font-weight: 600; color: var(--b1); margin-top: 4px; }
 .vc-org { color: var(--sub); font-size: 13px; margin-top: 2px; }
+.vc-org-name { overflow-wrap: anywhere; }
+.vc-verified { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; color: var(--b1); font-size: 11px; font-weight: 800; vertical-align: middle; }
+.vc-verified svg { width: 15px; height: 15px; flex: none; }
 .vc-loc { display: inline-flex; align-items: center; gap: 4px; color: var(--sub); font-size: 12px; margin-top: 8px; }
 .vc-loc svg { width: 13px; height: 13px; }
 .vc-acts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 20px 22px 6px; }
@@ -88,6 +91,10 @@
 .vc-form .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 .vc-form button { border: 0; border-radius: 10px; padding: 12px; font-weight: 700; background: var(--ink); color: var(--paper); cursor: pointer; }
 .vc-form button:disabled { opacity: 0.6; }
+.vc-consent { display: flex; align-items: flex-start; gap: 8px; color: var(--sub); font-size: 12px; line-height: 1.45; cursor: pointer; }
+.vc-consent input { width: 16px; height: 16px; margin: 1px 0 0; flex: none; accent-color: var(--b1); }
+.vc-consent-help { color: var(--sub); font-size: 11px; margin-top: -3px; }
+.vc-consent-help a { color: var(--b1); text-decoration: underline; }
 .vc-form .msg { font-size: 13px; font-weight: 600; }
 .vc-form .msg.ok { color: #047857; }
 .vc-form .msg.err { color: #be123c; }
@@ -121,6 +128,7 @@
 .vc--executive .vc-form button { background: var(--gold); color: #14161c; }
 .vc--executive .vc-logo { background: #1e2129; color: var(--gold); }
 .vc--executive .vc-soc a { color: var(--ink); }
+.vc--executive .vc-verified { color: var(--gold); }
 /* template: minimal */
 .vc--minimal .vc-cover { height: 6px; }
 .vc--minimal .vc-logo { position: static; display: inline-flex; margin: 18px 0 0 22px; box-shadow: none; background: var(--tile); }

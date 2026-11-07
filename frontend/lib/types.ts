@@ -22,6 +22,7 @@ export type CardPayload = {
   social: Social;
   company: {
     name: string;
+    privacyPolicyUrl: string;
     logoUrl: string;
     primaryColor: string;
     secondaryColor: string;
@@ -32,6 +33,7 @@ export type CardPayload = {
     phone: string;
     address: string;
   };
+  verified: { isVerified: boolean; verifiedAt: string | null };
   content: {
     products: { id: string; title: string; description: string; imageUrl: string; url: string }[];
     gallery: { id: string; title: string; imageUrl: string }[];

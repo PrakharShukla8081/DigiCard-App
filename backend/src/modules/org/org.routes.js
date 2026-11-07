@@ -59,6 +59,7 @@ router.get("/dashboard", async (req, res) => {
     success: true,
     data: {
       employees: { total, activeCards: active, inactiveCards: total - active, published, unpublished: total - published, activated, noPhoto },
+      organization: { isVerified: Boolean(org.verification?.isVerified), verifiedAt: org.verification?.verifiedAt || null },
       totals: { views: t.view, unique: t.unique, shares: t.share, qrScans: t.qr_scan, saves: t.vcard_download, enquiries: t.enquiry, calls: t.call_click, whatsapp: t.whatsapp_click },
       last30: { totals: last30.totals, series: last30.series },
       newEnquiries,
@@ -189,7 +190,10 @@ router.get("/enquiries/export.csv", async (req, res) => {
   const items = await Enquiry.find({ organizationId: org._id }).sort({ createdAt: -1 }).limit(50000).lean();
   const emps = await Employee.find({ organizationId: org._id }).select("firstName lastName").lean();
   const em = Object.fromEntries(emps.map((e) => [String(e._id), fullName(e)]));
-  const csv = toCsv(["Date", "Employee", "Name", "Email", "Phone", "Company", "Message", "Status"], items.map((i) => [new Date(i.createdAt).toISOString(), em[String(i.employeeId)] || "", i.name, i.email, i.phone, i.company, i.message, i.status]));
+  const csv = toCsv(
+    ["Date", "Employee", "Name", "Email", "Phone", "Company", "Message", "Status", "Consent", "Consent at"],
+    items.map((i) => [new Date(i.createdAt).toISOString(), em[String(i.employeeId)] || "", i.name, i.email, i.phone, i.company, i.message, i.status, i.consent ? "Yes" : "No", i.consentAt ? new Date(i.consentAt).toISOString() : ""])
+  );
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", 'attachment; filename="enquiries.csv"');
   res.send(csv);

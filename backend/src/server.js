@@ -6,6 +6,7 @@ import { ImportJob } from "./models/index.js";
 import { startScheduler } from "./jobs/scheduler.js";
 import { ensureSuperAdmin } from "./services/bootstrap.js";
 import { ensureBuiltInPlans, syncBuiltInPlans } from "./services/builtinPlans.js";
+import { runJobs } from "./jobs/runner.js";
 
 async function main() {
   assertEnv();
@@ -30,7 +31,12 @@ async function main() {
   ).setOptions({ skipTenantGuard: true });
 
   const app = createApp();
-  app.listen(env.port, () => logger.info(`Beno Digital Card API listening on http://localhost:${env.port} (${env.nodeEnv})`));
+  app.listen(env.port, () => {
+    logger.info(`Beno Digital Card API listening on http://localhost:${env.port} (${env.nodeEnv})`);
+    if (env.jobsEnabled && !env.isTest) {
+      setTimeout(() => runJobs(["subscriptions"], { trigger: "startup" }).catch((e) => logger.error("Startup subscription catch-up failed", e)), 30_000).unref();
+    }
+  });
 
   if (env.jobsEnabled) startScheduler();
 }

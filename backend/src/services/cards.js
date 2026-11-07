@@ -62,6 +62,7 @@ export async function buildCardPayload({ org, employee, ent, content }) {
     social,
     company: {
       name: org.name,
+      privacyPolicyUrl: org.privacyPolicyUrl || "",
       logoUrl: custom ? b.logoUrl : "",
       primaryColor: custom ? b.primaryColor || "#4F46E5" : "#4F46E5",
       secondaryColor: custom ? b.secondaryColor || "#10B981" : "#10B981",
@@ -71,6 +72,10 @@ export async function buildCardPayload({ org, employee, ent, content }) {
       email: org.contact?.email || "",
       phone: org.contact?.phone || "",
       address: org.contact?.address || "",
+    },
+    verified: {
+      isVerified: Boolean(org.verification?.isVerified),
+      verifiedAt: org.verification?.verifiedAt || null,
     },
     content: {
       products: sections.products ? content.products : [],

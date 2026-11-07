@@ -81,6 +81,13 @@ const organizationSchema = new Schema(
     name: { type: String, required: true, trim: true, maxlength: 120 },
     slug: { type: String, required: true, unique: true, lowercase: true, trim: true, maxlength: 60 },
     status: { type: String, enum: ["active", "inactive"], default: "active" },
+    privacyPolicyUrl: { type: String, trim: true, maxlength: 300, default: "" },
+    verification: {
+      isVerified: { type: Boolean, default: false },
+      verifiedAt: { type: Date, default: null },
+      verifiedBy: { type: ObjectId, ref: "User", default: null },
+      note: { type: String, trim: true, maxlength: 300, default: "" },
+    },
     contact: {
       email: { type: String, default: "" },
       phone: { type: String, default: "" },
@@ -293,6 +300,9 @@ const enquirySchema = new Schema(
     phone: { type: String, trim: true, maxlength: 20, default: "" },
     company: { type: String, trim: true, maxlength: 120, default: "" },
     message: { type: String, trim: true, maxlength: 2000, default: "" },
+    consent: { type: Boolean, default: false },
+    consentText: { type: String, trim: true, maxlength: 300, default: "" },
+    consentAt: { type: Date, default: null },
     status: { type: String, enum: ["new", "contacted", "closed"], default: "new" },
     source: { type: String, default: "direct" },
   },
@@ -457,5 +467,15 @@ export const PlatformSetting = model("PlatformSetting", platformSettingSchema);
 export async function getPlatformSettings() {
   return PlatformSetting.findOneAndUpdate({ key: "platform" }, { $setOnInsert: { key: "platform" } }, { upsert: true, returnDocument: "after" }).lean();
 }
+
+/* ───────────────────────────────── Job lock ───────────────────────────── */
+const jobLockSchema = new Schema({
+  name: { type: String, required: true, unique: true },
+  lockedUntil: { type: Date, required: true, default: () => new Date(0) },
+  lockedBy: { type: String, default: "" },
+  lastRunAt: { type: Date, default: null },
+  lastResult: { type: Schema.Types.Mixed, default: null },
+});
+export const JobLock = model("JobLock", jobLockSchema);
 
 export { Types };

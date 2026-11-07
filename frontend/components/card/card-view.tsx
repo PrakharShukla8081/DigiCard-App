@@ -91,7 +91,17 @@ export function CardView({ card, mode = "public", onTrack, source = "direct" }: 
         <div className="vc-org">
           {e.department}
           {e.department && c.name ? " · " : ""}
-          {c.name}
+          <span className="vc-org-name">{c.name}</span>
+          {card.verified?.isVerified && (
+            <span
+              className="vc-verified"
+              title={`Beno Support Technologies verified this company on ${new Date(card.verified.verifiedAt || Date.now()).toLocaleDateString()}`}
+              aria-label={`Verified company: Beno Support Technologies verified this company on ${new Date(card.verified.verifiedAt || Date.now()).toLocaleDateString()}`}
+            >
+              {I.verified}
+              <span>Verified company</span>
+            </span>
+          )}
         </div>
         {e.location && (
           <div className="vc-loc">
@@ -290,6 +300,8 @@ function alertToast(msg: string) {
 
 function Enquiry({ card, preview, source }: { card: CardPayload; preview: boolean; source: string }) {
   const [state, setState] = useState<{ busy: boolean; ok?: string; err?: string }>({ busy: false });
+  const [consent, setConsent] = useState(false);
+  const consentText = `I agree that ${card.company.name} may contact me about this enquiry.`;
   async function submit(ev: React.FormEvent<HTMLFormElement>) {
     ev.preventDefault();
     if (preview) return;
@@ -300,11 +312,12 @@ function Enquiry({ card, preview, source }: { card: CardPayload; preview: boolea
       const res = await fetch("/api/public/enquiries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...body, orgSlug: card.orgSlug, slug: card.slug, source }),
+        body: JSON.stringify({ ...body, consent: Boolean(body.consent), orgSlug: card.orgSlug, slug: card.slug, source }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.message || "Could not send. Please try again.");
       (ev.target as HTMLFormElement).reset();
+      setConsent(false);
       setState({ busy: false, ok: json.message || "Thank you! Your enquiry has been sent." });
     } catch (err) {
       setState({ busy: false, err: (err as Error).message });
@@ -318,8 +331,18 @@ function Enquiry({ card, preview, source }: { card: CardPayload; preview: boolea
         <input name="phone" placeholder="Phone number" aria-label="Phone number" inputMode="tel" maxLength={20} />
         <input name="email" type="email" placeholder="Email (optional if phone given)" aria-label="Email" maxLength={254} />
         <textarea name="message" placeholder="How can we help?" aria-label="Message" maxLength={2000} />
+        <label className="vc-consent">
+          <input name="consent" type="checkbox" checked={consent} onChange={(ev) => setConsent(ev.target.checked)} required aria-describedby="enquiry-consent-help" />
+          <span>{consentText}</span>
+        </label>
+        <small id="enquiry-consent-help" className="vc-consent-help">
+          See{" "}
+          <a href={card.company.privacyPolicyUrl || "/privacy"} target={card.company.privacyPolicyUrl ? "_blank" : undefined} rel={card.company.privacyPolicyUrl ? "noopener noreferrer" : undefined}>
+            privacy policy
+          </a>
+        </small>
         <input name="website" className="hp" tabIndex={-1} autoComplete="off" aria-hidden="true" />
-        <button type="submit" disabled={state.busy || preview}>
+        <button type="submit" disabled={state.busy || preview || !consent}>
           {state.busy ? "Sending…" : `Send to ${card.employee.firstName || "us"}`}
         </button>
         {state.ok && <p className="msg ok">{state.ok}</p>}

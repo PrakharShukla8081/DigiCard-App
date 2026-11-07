@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/field";
 import { Chip, Empty, ErrorBox, PageHeader, PageLoader, Pagination, Panel, useConfirm } from "@/components/ui/misc";
 
-type Enq = { _id: string; name: string; email: string; phone: string; company: string; message: string; status: "new" | "contacted" | "closed"; source: string; employeeName: string; createdAt: string };
+type Enq = { _id: string; name: string; email: string; phone: string; company: string; message: string; status: "new" | "contacted" | "closed"; source: string; employeeName: string; createdAt: string; consent: boolean; consentAt: string | null };
 
 export default function EnquiriesPage() {
   const confirm = useConfirm();
@@ -77,6 +77,7 @@ export default function EnquiriesPage() {
                     <div className="mt-0.5 text-[13px] text-muted">
                       {[e.phone, e.email, e.company].filter(Boolean).join(" · ")} — for <b className="text-fg">{e.employeeName}</b> · {fmtDate(e.createdAt, true)}
                     </div>
+                    <div className="mt-1 text-[12px] text-muted">Consent: {e.consent && e.consentAt ? `Yes, ${fmtDate(e.consentAt, true)}` : "—"}</div>
                     {e.message && <p className="mt-2 max-w-3xl text-[14px] whitespace-pre-line">{e.message}</p>}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">

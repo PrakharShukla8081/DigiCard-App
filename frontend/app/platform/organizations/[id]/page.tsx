@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Pencil, Plus, Power, RefreshCw, Trash2, UserPlus } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Pencil, Plus, Power, RefreshCw, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { useLoad } from "@/lib/hooks";
 import { fmtDate, fmtNum, daysLeft } from "@/lib/utils";
@@ -31,7 +31,16 @@ type Sub = {
   createdAt: string;
 };
 type Detail = {
-  organization: { _id: string; name: string; slug: string; status: string; contact: Record<string, string>; createdAt: string; branding: { logoUrl: string } };
+  organization: {
+    _id: string;
+    name: string;
+    slug: string;
+    status: string;
+    contact: Record<string, string>;
+    createdAt: string;
+    branding: { logoUrl: string };
+    verification: { isVerified: boolean; verifiedAt: string | null; verifiedBy: { name: string; email: string } | null; note: string };
+  };
   subscriptions: Sub[];
   admins: { _id: string; name: string; email: string; status: string; lastLoginAt: string | null; invitedAt: string | null }[];
   usage: { employees: number; activeCards: number; publishedCards: number; last30Days: { views: number; saves: number; shares: number; enquiries: number } };
@@ -56,6 +65,11 @@ export default function OrganizationDetail() {
   const [invite, setInvite] = useState<{ invite: Invite; email: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<{ _id: string; name: string; email: string } | null>(null);
+  const [verificationNote, setVerificationNote] = useState("");
+
+  useEffect(() => {
+    if (data) setVerificationNote(data.detail.organization.verification?.note || "");
+  }, [data]);
 
   if (loading && !data) return <PageLoader />;
   if (error) return <ErrorBox message={error} onRetry={reload} />;
@@ -111,6 +125,11 @@ export default function OrganizationDetail() {
       danger: next === "inactive",
     });
     if (ok) run(() => api.post(`/platform/organizations/${id}/status`, { status: next }), next === "inactive" ? "Company deactivated" : "Company activated");
+  }
+
+  async function setVerification(isVerified: boolean) {
+    if (!isVerified && !(await confirm({ title: `Remove verification from ${org.name}?`, body: "The verified badge will disappear from all public cards.", confirmLabel: "Remove verification", danger: true }))) return;
+    run(() => api.patch(`/platform/organizations/${id}/verification`, { isVerified, note: verificationNote }), isVerified ? "Company verified" : "Verification removed");
   }
 
   const limit = current ? current.employeeLimitOverride ?? current.plan?.employeeLimit : null;
@@ -226,6 +245,29 @@ export default function OrganizationDetail() {
               </tbody>
             </Table>
           )}
+        </Panel>
+        <Panel>
+          <PanelHeader title="Verification" sub="Only Beno Super Admins can control the public verified badge." />
+          <div className="space-y-4 px-5 pb-5">
+            <div className="flex items-center gap-3">
+              {org.verification?.isVerified ? <Chip tone="ok"><BadgeCheck /> Verified company</Chip> : <Chip>Not verified</Chip>}
+              {org.verification?.verifiedAt && <span className="text-[12px] text-muted">Since {fmtDate(org.verification.verifiedAt)}</span>}
+            </div>
+            <Field label="Verification note" hint="Internal note, up to 300 characters.">
+              <Textarea maxLength={300} value={verificationNote} onChange={(e) => setVerificationNote(e.target.value)} placeholder="Verified business documents reviewed" />
+            </Field>
+            {org.verification?.isVerified && org.verification.verifiedBy && (
+              <p className="text-[13px] text-muted">Verified by <b className="text-fg">{org.verification.verifiedBy.name}</b> ({org.verification.verifiedBy.email})</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="primary" onClick={() => setVerification(true)} loading={busy} disabled={org.verification?.isVerified}>
+                <ShieldCheck /> Verify company
+              </Button>
+              <Button variant="danger-outline" onClick={() => setVerification(false)} loading={busy} disabled={!org.verification?.isVerified}>
+                Remove verification
+              </Button>
+            </div>
+          </div>
         </Panel>
 
         <div className="flex flex-col gap-4">

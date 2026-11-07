@@ -19,6 +19,7 @@ function settingsDto(org) {
   return {
     name: org.name,
     slug: org.slug,
+    privacyPolicyUrl: org.privacyPolicyUrl || "",
     contact: org.contact,
     branding: org.branding,
     cardSettings: org.cardSettings,
@@ -37,6 +38,12 @@ settingsRouter.patch("/company", async (req, res) => {
   const b = parse(
     z.object({
       name: z.string().trim().min(2).max(120).optional(),
+      privacyPolicyUrl: z
+        .string()
+        .trim()
+        .max(300)
+        .refine((value) => value === "" || /^https:\/\//i.test(value), "Privacy policy URL must use https://")
+        .optional(),
       contact: z.object({ email: z.union([emailSchema, z.literal("")]).optional(), phone: phoneSchema, website: urlish, address: optStr(400), gstin: optStr(20) }).partial().optional(),
       branding: z
         .object({
@@ -62,6 +69,7 @@ settingsRouter.patch("/company", async (req, res) => {
   }
   const org = await Organization.findById(req.tenant.organizationId);
   if (b.name) org.name = b.name;
+  if (b.privacyPolicyUrl !== undefined) org.privacyPolicyUrl = b.privacyPolicyUrl;
   if (b.timezone) org.timezone = b.timezone;
   if (b.contact) for (const [k, v] of Object.entries(b.contact)) if (v !== undefined) org.contact[k] = v;
   if (b.branding) {

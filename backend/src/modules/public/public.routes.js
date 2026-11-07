@@ -114,12 +114,14 @@ router.post("/enquiries", enquiryLimiter, async (req, res) => {
       phone: z.string().trim().max(20).optional(),
       company: z.string().trim().max(120).optional(),
       message: z.string().trim().max(2000).optional(),
+      consent: z.boolean().optional(),
       website: z.string().max(200).optional(), // honeypot: real users never fill this hidden field
       source: z.string().max(20).optional(),
     }),
     req.body
   );
   if (b.website) return res.status(201).json({ success: true }); // silently drop bots
+  parse(z.object({ consent: z.literal(true, { error: "Please agree to be contacted" }) }), b);
   if (!b.email && !b.phone) throw badRequest("Enter your phone number or email so we can reply.");
   if (b.phone && !isValidPhone(b.phone)) throw badRequest("Enter a valid phone number.");
   const { org, employee, ent } = await resolveCard(b.orgSlug, b.slug);
@@ -132,6 +134,9 @@ router.post("/enquiries", enquiryLimiter, async (req, res) => {
     phone: b.phone ? normalizePhone(b.phone) : "",
     company: b.company || "",
     message: b.message || "",
+    consent: true,
+    consentText: `I agree that ${org.name} may contact me about this enquiry.`,
+    consentAt: new Date(),
     source: sourceOf(b.source),
   });
   const ua = String(req.headers["user-agent"] || "");

@@ -15,6 +15,8 @@ import publicRoutes from "./modules/public/public.routes.js";
 import publicSiteRoutes from "./modules/public/site.routes.js";
 import platformLeadsRoutes from "./modules/platform/leads.routes.js";
 import platformTestimonialsRoutes from "./modules/platform/testimonials.routes.js";
+import internalRoutes from "./modules/internal.routes.js";
+import mongoose from "mongoose";
 
 export function createApp() {
   const app = express();
@@ -53,7 +55,16 @@ export function createApp() {
   }
 
   app.get("/health", (_req, res) => res.json({ success: true, status: "ok" }));
-  app.get("/api/health", (_req, res) => res.json({ success: true, status: "ok" }));
+  app.get("/api/health", async (req, res) => {
+    if (req.query.deep !== "1") return res.json({ success: true, status: "ok" });
+    try {
+      await mongoose.connection.db.admin().ping({ maxTimeMS: 3000 });
+      return res.status(200).json({ status: "ok", db: "ok", uptimeSec: Math.floor(process.uptime()) });
+    } catch {
+      return res.status(503).json({ status: "degraded", db: "down" });
+    }
+  });
+  app.use("/api/internal/jobs", internalRoutes);
 
   app.use("/api/auth", authRoutes);
   app.use("/api/public/site", publicSiteRoutes);
