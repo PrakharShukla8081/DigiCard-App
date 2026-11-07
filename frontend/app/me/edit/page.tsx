@@ -9,12 +9,12 @@ import { cn } from "@/lib/utils";
 import type { CardPayload } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";
-import { ErrorBox, PageHeader, PageLoader, Panel, Segmented } from "@/components/ui/misc";
+import { ErrorBox, PageHeader, PageLoader, Panel, Segmented, ToggleRow } from "@/components/ui/misc";
 import { CardView } from "@/components/card/card-view";
 import { PhoneFrame } from "@/components/card/phone-frame";
 
 type Me = {
-  employee: { name: string; firstName: string; lastName: string; designation: string; department: string; workEmail: string; mobile: string; whatsapp: string; photoUrl: string; bio: string; location: string; website: string; social: Record<string, string> };
+  employee: { name: string; firstName: string; lastName: string; designation: string; department: string; hideFromDirectory: boolean; workEmail: string; mobile: string; whatsapp: string; photoUrl: string; bio: string; location: string; website: string; social: Record<string, string> };
   editableFields: string[];
   card: CardPayload;
 };
@@ -39,6 +39,7 @@ export default function EditMyCardPage() {
   const { data, error, loading, reload } = useLoad(() => api.get<Me>("/me/card"));
   const [v, setV] = useState<Record<string, string>>({});
   const [photo, setPhoto] = useState("");
+  const [hideFromDirectory, setHideFromDirectory] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pane, setPane] = useState<"edit" | "preview">("edit");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -58,6 +59,7 @@ export default function EditMyCardPage() {
       ...Object.fromEntries(["linkedin", "instagram", "facebook", "youtube", "twitter"].map((k) => [k, e.social?.[k] || ""])),
     });
     setPhoto(e.photoUrl);
+    setHideFromDirectory(e.hideFromDirectory);
   }, [data]);
 
   const preview = useMemo<CardPayload | null>(() => {
@@ -79,8 +81,9 @@ export default function EditMyCardPage() {
   const lockedList = FIELDS.filter((f) => !allowed.has(f.key)).map((f) => f.label);
 
   async function save() {
-    const body: Record<string, string> = {};
+    const body: Record<string, unknown> = {};
     for (const f of editable) body[f.key] = (v[f.key] || "").trim();
+    body.hideFromDirectory = hideFromDirectory;
     setBusy(true);
     try {
       await api.patch("/me/card", body);
@@ -120,7 +123,7 @@ export default function EditMyCardPage() {
             <div className="lg:hidden">
               <Segmented label="Edit or preview" value={pane} onChange={setPane} options={[{ value: "edit", label: "Edit" }, { value: "preview", label: "Preview" }]} />
             </div>
-            <Button variant="primary" onClick={save} loading={busy} disabled={editable.length === 0}>
+            <Button variant="primary" onClick={save} loading={busy} disabled={editable.length === 0 && hideFromDirectory === data.employee.hideFromDirectory}>
               Save changes
             </Button>
           </>
@@ -159,6 +162,14 @@ export default function EditMyCardPage() {
             <div className="mb-4">
               <div className="eyebrow">Name</div>
               <div className="font-semibold">{data.employee.name}</div>
+            </div>
+            <div className="mb-4 border-b border-line pb-4">
+              <ToggleRow
+                title="Hide my profile from the company directory"
+                sub="You can still share your card link directly."
+                checked={hideFromDirectory}
+                onChange={setHideFromDirectory}
+              />
             </div>
             {editable.length === 0 ? (
               <p className="text-muted">Your admin has not allowed any changes. Contact them to update your details.</p>

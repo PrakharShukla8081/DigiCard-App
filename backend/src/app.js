@@ -10,6 +10,7 @@ import { logger } from "./common/logger.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import platformRoutes from "./modules/platform/platform.routes.js";
 import orgRoutes from "./modules/org/org.routes.js";
+import orgDirectoryRoutes from "./modules/org/directory.routes.js";
 import meRoutes from "./modules/me/me.routes.js";
 import publicRoutes from "./modules/public/public.routes.js";
 import publicSiteRoutes from "./modules/public/site.routes.js";
@@ -71,6 +72,7 @@ export function createApp() {
   app.use("/api/platform/leads", platformLeadsRoutes);
   app.use("/api/platform/testimonials", platformTestimonialsRoutes);
   app.use("/api/platform", platformRoutes);
+  app.use("/api/org/directory", orgDirectoryRoutes);
   app.use("/api/org", orgRoutes);
   app.use("/api/me", meRoutes);
   app.use("/api/public", publicRoutes);

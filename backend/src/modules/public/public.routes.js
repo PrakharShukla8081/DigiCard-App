@@ -15,6 +15,7 @@ import { visitorHash } from "../../common/crypto.js";
 import { getEntitlements } from "../../services/entitlements.js";
 import { buildCardPayload, loadCardContent, buildVcard, cardUrl, fullName } from "../../services/cards.js";
 import { trackEvent } from "../../services/analytics.js";
+import { directoryPage } from "../../services/directory.js";
 import { sendEmail, templates } from "../../services/email.js";
 import { dayKey } from "../../services/time.js";
 import { env } from "../../config/env.js";
@@ -43,7 +44,18 @@ async function resolveCard(orgSlug, empSlug) {
 const isInternal = (req) => Boolean(env.internalApiKey) && req.headers["x-internal-key"] === env.internalApiKey;
 const cardLimiter = rateLimit({ windowMs: 60_000, max: 120, skip: isInternal });
 const eventLimiter = rateLimit({ windowMs: 60_000, max: 60 });
+const directoryLimiter = rateLimit({ windowMs: 60_000, max: 30 });
 const enquiryLimiter = rateLimit({ windowMs: 60 * 60_000, max: 5, message: "You have sent several enquiries already. Please try again later." });
+
+router.get("/directory/:orgSlug", directoryLimiter, async (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  const org = await Organization.findOne({ slug: req.params.orgSlug }).lean();
+  if (!org || org.status !== "active" || !org.directory?.enabled || !org.directory?.public) throw notFound("Company directory not found.");
+  const ent = await getEntitlements(org._id);
+  if (!ent.active || !ent.features.companyDirectory) throw notFound("Company directory not found.");
+  const result = await directoryPage(org, req.query);
+  res.json({ success: true, ...result });
+});
 
 router.get("/cards/:orgSlug/:empSlug", cardLimiter, async (req, res) => {
   const { org, employee, ent } = await resolveCard(req.params.orgSlug, req.params.empSlug);

@@ -62,6 +62,7 @@ export type Employee = {
   name: string;
   designation: string;
   department: string;
+  hideFromDirectory: boolean;
   workEmail: string;
   mobile: string;
   whatsapp: string;
@@ -84,6 +85,14 @@ export type Employee = {
   createdAt: string;
   card?: CardPayload;
   qr?: QrStyle;
+};
+
+export type DirectoryEntry = {
+  name: string;
+  designation: string;
+  department: string;
+  photo: string;
+  cardUrl: string;
 };
 
 export type Plan = {

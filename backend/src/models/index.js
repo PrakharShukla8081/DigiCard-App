@@ -111,6 +111,10 @@ const organizationSchema = new Schema(
       tagline: { type: String, default: "" },
       social: socialShape,
     },
+    directory: {
+      enabled: { type: Boolean, default: false },
+      public: { type: Boolean, default: false },
+    },
     cardSettings: {
       template: { type: String, enum: CARD_TEMPLATES, default: "classic" },
       allowEmployeeTemplate: { type: Boolean, default: false },
@@ -237,6 +241,7 @@ const employeeSchema = new Schema(
     lastName: { type: String, trim: true, maxlength: 60, default: "" },
     designation: { type: String, trim: true, maxlength: 100, default: "" },
     department: { type: String, trim: true, maxlength: 100, default: "" },
+    hideFromDirectory: { type: Boolean, default: false },
     workEmail: { type: String, trim: true, lowercase: true, maxlength: 254, default: "" },
     mobile: { type: String, trim: true, maxlength: 20, default: "" },
     whatsapp: { type: String, trim: true, maxlength: 20, default: "" },

@@ -36,6 +36,7 @@ type Form = {
   template: string;
   cardStatus: "active" | "inactive";
   isPublished: boolean;
+  hideFromDirectory: boolean;
   slug: string;
 };
 
@@ -59,6 +60,7 @@ const fromEmployee = (e?: Employee): Form => ({
   template: e?.template || "",
   cardStatus: e?.cardStatus || "active",
   isPublished: e?.isPublished ?? true,
+  hideFromDirectory: e?.hideFromDirectory ?? false,
   slug: e?.slug || "",
 });
 
@@ -79,6 +81,7 @@ const toBody = (f: Form, isNew: boolean, original?: Employee) => {
     template: f.template,
     cardStatus: f.cardStatus,
     isPublished: f.isPublished,
+    hideFromDirectory: f.hideFromDirectory,
   };
   if (!isNew && f.slug && f.slug !== original?.slug) body.slug = f.slug;
   return body;
@@ -298,6 +301,7 @@ export function EmployeeEditor({ employee, base, onSaved }: { employee?: Employe
               <div className="grid gap-3 sm:grid-cols-2">
                 <ToggleRow title="Published" sub="Visible at its public link" checked={f.isPublished} onChange={(v) => set({ isPublished: v })} />
                 <ToggleRow title="Card active" sub="Inactive cards are hidden and excluded from reminders" checked={f.cardStatus === "active"} onChange={(v) => set({ cardStatus: v ? "active" : "inactive" })} />
+                <ToggleRow title="Hide from company directory" sub="Employee will not appear in the company directory" checked={f.hideFromDirectory} onChange={(v) => set({ hideFromDirectory: v })} />
                 <Field label="Card design" htmlFor="f-tpl" hint={customBranding ? undefined : "Templates need Custom branding in your plan"}>
                   <Select id="f-tpl" value={f.template} disabled={!customBranding} onChange={(e) => set({ template: e.target.value })}>
                     {TEMPLATES.map((t) => (

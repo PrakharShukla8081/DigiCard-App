@@ -19,6 +19,7 @@ type Settings = {
   name: string;
   slug: string;
   privacyPolicyUrl: string;
+  directory: { enabled: boolean; public: boolean };
   contact: { email: string; phone: string; website: string; address: string; gstin: string };
   branding: { logoUrl: string; primaryColor: string; secondaryColor: string; description: string; tagline: string; social: Record<string, string>; qr: ReturnType<typeof qrDefaults> };
   cardSettings: { template: string; allowEmployeeTemplate: boolean; sections: Record<string, boolean>; employeeEditableFields: string[]; allowEmployeeLogin: boolean };
@@ -97,7 +98,7 @@ export default function BrandingPage() {
   const custom = hasFeature("customBranding");
 
   useEffect(() => {
-    if (data) setS({ ...data.settings, branding: { ...data.settings.branding, qr: qrDefaults(data.settings.branding.qr) } });
+    if (data) setS({ ...data.settings, directory: data.settings.directory || { enabled: false, public: false }, branding: { ...data.settings.branding, qr: qrDefaults(data.settings.branding.qr) } });
   }, [data]);
 
   const preview = useMemo<CardPayload | null>(() => {
@@ -153,7 +154,13 @@ export default function BrandingPage() {
       const branding: Record<string, unknown> = { description: s!.branding.description, tagline: s!.branding.tagline, social: s!.branding.social };
       if (custom) Object.assign(branding, { primaryColor: s!.branding.primaryColor, secondaryColor: s!.branding.secondaryColor });
       if (custom) branding.qr = s!.branding.qr;
-      await api.patch("/org/settings/company", { name: s!.name, privacyPolicyUrl: s!.privacyPolicyUrl, contact: s!.contact, branding });
+      await api.patch("/org/settings/company", {
+        name: s!.name,
+        privacyPolicyUrl: s!.privacyPolicyUrl,
+        contact: s!.contact,
+        branding,
+        ...(hasFeature("companyDirectory") ? { directory: s!.directory } : {}),
+      });
       const card: Record<string, unknown> = {
         sections: s!.cardSettings.sections,
         employeeEditableFields: s!.cardSettings.employeeEditableFields,
@@ -208,6 +215,27 @@ export default function BrandingPage() {
       />
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className={cn("flex flex-col gap-4", pane === "preview" && "max-lg:hidden")}>
+          <Panel className="p-5">
+            <PanelHeader title="Company directory" sub="Let your team and visitors find published employee cards." />
+            <div className="flex flex-col gap-3">
+              <ToggleRow
+                title="Enable company directory"
+                sub="Available to company admins and employees in your organization."
+                checked={s.directory.enabled}
+                onChange={(enabled) => setS({ ...s, directory: { ...s.directory, enabled, public: enabled && s.directory.public } })}
+                disabled={!hasFeature("companyDirectory")}
+                locked={!hasFeature("companyDirectory") ? "Included with the Company directory feature" : undefined}
+              />
+              <ToggleRow
+                title="Make directory public"
+                sub="Anyone with the link can see names and designations"
+                checked={s.directory.public}
+                onChange={(isPublic) => setS({ ...s, directory: { enabled: true, public: isPublic } })}
+                disabled={!hasFeature("companyDirectory") || !s.directory.enabled}
+              />
+              {!hasFeature("companyDirectory") && <p className="text-[12px] text-muted">Company directory is not included in your plan.</p>}
+            </div>
+          </Panel>
           <Panel>
             <PanelHeader title="Logo & colours" sub={locked} />
             <div className={cn("flex flex-col gap-5 px-5 pb-5", !custom && "pointer-events-none opacity-50")}>

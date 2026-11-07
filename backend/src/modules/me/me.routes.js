@@ -46,6 +46,7 @@ router.get("/card", async (req, res) => {
         name: fullName(e),
         designation: e.designation,
         department: e.department,
+        hideFromDirectory: Boolean(e.hideFromDirectory),
         workEmail: e.workEmail,
         mobile: e.mobile,
         whatsapp: e.whatsapp,
@@ -70,6 +71,7 @@ const selfBody = z
   .object({
     designation: optStr(100),
     department: optStr(100),
+    hideFromDirectory: z.boolean().optional(),
     workEmail: z.union([emailSchema, z.literal("")]).optional(),
     mobile: phoneSchema,
     whatsapp: phoneSchema,
@@ -94,7 +96,7 @@ router.patch("/card", async (req, res) => {
     if (e.details?.some((d) => /unrecognized/i.test(d.message))) throw forbidden("You tried to change a field that cannot be edited here.");
     throw e;
   }
-  const blocked = Object.keys(b).filter((k) => !allowed.has(k));
+  const blocked = Object.keys(b).filter((k) => k !== "hideFromDirectory" && !allowed.has(k));
   if (blocked.length) throw forbidden(`Your admin has not allowed editing: ${blocked.join(", ")}.`);
   const e = await loadSelf(req);
   if (b.workEmail && b.workEmail !== e.workEmail && (await Employee.exists({ organizationId: org._id, workEmail: b.workEmail, _id: { $ne: e._id } }))) {

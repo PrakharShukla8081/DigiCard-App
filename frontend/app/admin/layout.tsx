@@ -1,11 +1,12 @@
 "use client";
 
-import { BarChart3, Bell, CreditCard, FileSpreadsheet, FileText, Images, Inbox, LayoutDashboard, Palette, UserCog, Users } from "lucide-react";
+import { BarChart3, Bell, ContactRound, CreditCard, FileSpreadsheet, FileText, Images, Inbox, LayoutDashboard, Palette, UserCog, Users } from "lucide-react";
 import { AppShell, type NavItem } from "@/components/shell/app-shell";
 
 const NAV: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/admin/employees", label: "Employees & cards", icon: Users },
+  { href: "/admin/directory", label: "Company directory", icon: ContactRound, feature: "companyDirectory", directory: true },
   { href: "/admin/import", label: "Bulk upload", icon: FileSpreadsheet, feature: "bulkUpload" },
   { href: "/admin/branding", label: "Branding & card design", icon: Palette },
   { href: "/admin/content", label: "Products, gallery, videos", icon: Images, feature: "productsGallery" },

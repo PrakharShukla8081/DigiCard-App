@@ -57,7 +57,7 @@ async function sessionPayload(user) {
     employeeId: user.employeeId ? String(user.employeeId) : null,
   };
   if (!user.organizationId) return { user: base, organization: null, subscription: null };
-  const org = await Organization.findById(user.organizationId).select("name slug status branding.logoUrl branding.primaryColor cardSettings.allowEmployeeLogin").lean();
+  const org = await Organization.findById(user.organizationId).select("name slug status branding.logoUrl branding.primaryColor cardSettings.allowEmployeeLogin directory.enabled").lean();
   const ent = await getEntitlements(user.organizationId);
   return {
     user: base,
@@ -68,6 +68,7 @@ async function sessionPayload(user) {
       status: org.status,
       logoUrl: org.branding?.logoUrl || "",
       primaryColor: org.branding?.primaryColor || "",
+      directoryEnabled: Boolean(org.directory?.enabled),
     },
     subscription: {
       status: ent.status,

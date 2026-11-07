@@ -33,6 +33,7 @@ function settingsDto(org) {
     privacyPolicyUrl: org.privacyPolicyUrl || "",
     contact: org.contact,
     branding: org.branding,
+    directory: org.directory,
     cardSettings: org.cardSettings,
     timezone: org.timezone,
   };
@@ -76,11 +77,13 @@ settingsRouter.patch("/company", async (req, res) => {
         })
         .partial()
         .optional(),
+      directory: z.object({ enabled: z.boolean().optional(), public: z.boolean().optional() }).partial().optional(),
       timezone: z.string().max(60).optional(),
     }),
     req.body
   );
   if (b.branding && (b.branding.primaryColor || b.branding.secondaryColor || b.branding.qr)) assertFeature(ent, "customBranding", "Custom branding");
+  if (b.directory) assertFeature(ent, "companyDirectory", "Company directory");
   if (b.branding?.qr) {
     const current = { ...DEFAULT_QR, ...(req.tenant.org.branding?.qr || {}), ...b.branding.qr };
     if (contrastRatio(current.foreground, current.background) < 4.5) throw badRequest("These colours are too close; the QR code may not scan.");
@@ -108,6 +111,7 @@ settingsRouter.patch("/company", async (req, res) => {
     if (social) for (const [k, v] of Object.entries(social)) if (v !== undefined) org.branding.social[k] = v;
     if (qr) for (const [k, v] of Object.entries(qr)) if (v !== undefined) org.branding.qr[k] = v;
   }
+  if (b.directory) for (const [k, v] of Object.entries(b.directory)) if (v !== undefined) org.directory[k] = v;
   await org.save();
   audit(req, { action: "settings.company_updated", entity: "Organization", entityId: org._id, summary: Object.keys(b).join(", ") });
   res.json({ success: true, data: settingsDto(org.toObject()) });

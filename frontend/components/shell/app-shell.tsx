@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { PageLoader, Avatar, SubStatusChip } from "@/components/ui/misc";
 import { Logo } from "./logo";
 
-export type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean; feature?: string };
+export type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean; feature?: string; directory?: boolean };
 
 /**
  * Authenticated layout: role guard + sidebar (drawer on phones) + top bar.
@@ -34,7 +34,7 @@ export function AppShell({ role, nav, children, areaLabel }: { role: "super_admi
 
   const org = session.organization;
   const sub = session.subscription;
-  const items = nav.filter((n) => !n.feature || hasFeature(n.feature));
+  const items = nav.filter((n) => (!n.feature || hasFeature(n.feature)) && (!n.directory || org?.directoryEnabled));
   const isOn = (n: NavItem) => (n.exact ? pathname === n.href : pathname === n.href || pathname.startsWith(n.href + "/"));
 
   const sidebar = (

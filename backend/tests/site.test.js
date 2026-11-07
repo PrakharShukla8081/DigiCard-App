@@ -84,6 +84,8 @@ test("website plan visibility and pricing validation are enforced", async () => 
 });
 
 test("built-in sync protects subscriptions and fills only missing fields", async () => {
+  assert.equal(BUILTIN_PLANS.find((plan) => plan.code === "business").features.companyDirectory, true);
+  assert.equal(BUILTIN_PLANS.find((plan) => plan.code === "enterprise").features.companyDirectory, true);
   const definition = BUILTIN_PLANS.find((plan) => plan.code === "professional");
   const existing = await M.Plan.create({ ...definition, _id: undefined, isBuiltIn: true, website: { ...definition.website, monthlyPrice: undefined, description: "Admin edit" } });
   await syncBuiltInPlans({ apply: true });

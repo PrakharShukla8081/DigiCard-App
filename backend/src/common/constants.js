@@ -9,6 +9,7 @@ export const FEATURES = Object.freeze({
   bulkUpload: "Bulk employee upload (CSV/Excel)",
   customBranding: "Custom branding (logo, colours, templates)",
   employeeLogin: "Employee self-service login",
+  companyDirectory: "Company directory",
   advancedAnalytics: "Advanced analytics (custom ranges, per-employee, leaderboard, export)",
   enquiryForm: "Enquiry form on cards",
   productsGallery: "Products, gallery and video sections",

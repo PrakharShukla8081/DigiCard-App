@@ -131,7 +131,7 @@ test("super admin logs in; wrong password rejected", async () => {
 });
 
 test("super admin creates plans and two organizations", async () => {
-  const features = { bulkUpload: true, customBranding: true, employeeLogin: true, advancedAnalytics: true, enquiryForm: true, productsGallery: true, emailReminders: true, whatsappReminders: true, removeBranding: false };
+  const features = { bulkUpload: true, customBranding: true, companyDirectory: true, employeeLogin: true, advancedAnalytics: true, enquiryForm: true, productsGallery: true, emailReminders: true, whatsappReminders: true, removeBranding: false };
   let r = await sa.post("/api/platform/plans", { name: "Enterprise", price: 100000, billingCycle: "yearly", durationDays: 365, employeeLimit: 100, features });
   assert.equal(r.status, 201, r.message);
   planAll = r.data;
@@ -288,6 +288,66 @@ test("bulk QR SVG export is tenant-scoped and encodes tracked card URLs", async 
   assert.ok(entriesB.some((entry) => /\/c\/xyz-company\/mohit\?src=qr/.test(entry.content)));
   assert.ok(entriesB.every((entry) => !entry.content.includes("abc-company")));
   assert.ok(entriesB.every((entry) => !entry.content.includes("Scan to connect")));
+});
+
+test("company directory feature off returns 403", async () => {
+  const response = await adminB.get("/api/org/directory");
+  assert.equal(response.status, 403);
+});
+
+test("company directory public route returns 404 when public access is off", async () => {
+  await adminA.patch("/api/org/settings/company", { directory: { enabled: true, public: false } });
+  const response = await anon.get("/api/public/directory/abc-company");
+  assert.equal(response.status, 404);
+});
+
+test("company directory never lists employees from another organization", async () => {
+  await M.Plan.updateOne({ _id: planSmall._id }, { $set: { "features.companyDirectory": true } });
+  const enabledForB = await adminB.patch("/api/org/settings/company", { directory: { enabled: true } });
+  assert.equal(enabledForB.status, 200, enabledForB.message);
+  const enabled = await adminA.patch("/api/org/settings/company", { directory: { enabled: true } });
+  assert.equal(enabled.status, 200, enabled.message);
+  const directoryA = await adminA.get("/api/org/directory");
+  assert.ok(directoryA.data.some((person) => person.name === "Rahul Sharma"));
+  assert.ok(directoryA.data.every((person) => !person.name.includes("Mohit")));
+  assert.ok(directoryA.data.every((person) => person.cardUrl.includes("/c/abc-company/")));
+  const directoryB = await adminB.get("/api/org/directory");
+  assert.ok(directoryB.data.length > 0);
+  assert.ok(directoryB.data.every((person) => person.cardUrl.includes("/c/xyz-company/")));
+});
+
+test("company directory excludes hidden, inactive, and unpublished employees", async () => {
+  const hidden = await adminA.post("/api/org/employees", { employeeCode: "A-HIDE", firstName: "Hidden", hideFromDirectory: true });
+  assert.equal(hidden.status, 201, hidden.message);
+  const inactive = await adminA.post("/api/org/employees", { employeeCode: "A-INACTIVE", firstName: "Inactive", cardStatus: "inactive" });
+  assert.equal(inactive.status, 201, inactive.message);
+  const unpublished = await adminA.post("/api/org/employees", { employeeCode: "A-UNPUBLISHED", firstName: "Unpublished", isPublished: false });
+  assert.equal(unpublished.status, 201, unpublished.message);
+
+  const filtered = await adminA.get("/api/org/directory?search=Rahul");
+  assert.equal(filtered.data.length, 1);
+  assert.deepEqual(Object.keys(filtered.data[0]).sort(), ["cardUrl", "department", "designation", "name", "photo"]);
+  assert.equal(filtered.data[0].name, "Rahul Sharma");
+  assert.equal((await adminA.get("/api/org/directory?search=Rahul.*")).data.length, 0, "search syntax is escaped");
+  const internal = await adminA.get("/api/org/directory");
+  assert.equal(internal.pagination.total, 1);
+  assert.equal((await adminA.get("/api/org/directory?limit=80")).pagination.limit, 50);
+  assert.ok(internal.data.every((person) => !["Hidden", "Inactive", "Unpublished", "Mohit"].includes(person.name)));
+});
+
+test("public company directory excludes email and phone fields", async () => {
+  const enabled = await adminA.patch("/api/org/settings/company", { directory: { enabled: true, public: true } });
+  assert.equal(enabled.status, 200, enabled.message);
+  const publicResponse = await anon.get("/api/public/directory/abc-company", { raw: true });
+  assert.equal(publicResponse.status, 200);
+  assert.equal(publicResponse.headers.get("x-robots-tag"), "noindex, nofollow");
+  const publicBody = await publicResponse.json();
+  assert.ok(publicBody.data.length > 0);
+  for (const person of publicBody.data) {
+    assert.deepEqual(Object.keys(person).sort(), ["cardUrl", "department", "designation", "name", "photo"]);
+    assert.doesNotMatch(JSON.stringify(person), /email|phone|mobile|whatsapp/i);
+  }
+  assert.ok(publicBody.data.every((person) => !person.name.includes("Mohit")));
 });
 
 test("bulk import validates rows, detects duplicates and reports errors", async () => {
@@ -475,8 +535,14 @@ test("employee login: invite, edit only allowed fields, cannot touch others", as
   const me = await emp.get("/api/me/card");
   assert.equal(me.data.employee.name, "Rahul Sharma");
   assert.ok((await M.Employee.findOne({ _id: empA._id, organizationId: orgA._id })).activatedAt);
+  const directory = await emp.get("/api/org/directory");
+  assert.ok(directory.data.some((person) => person.name === "Rahul Sharma"), "employee can read their organization's directory");
 
   assert.equal((await emp.patch("/api/me/card", { bio: "Hello", mobile: "+91 99999 88888" })).status, 200);
+  assert.equal((await emp.patch("/api/me/card", { hideFromDirectory: true })).status, 200, "employee can opt out of directory regardless of admin editable fields");
+  assert.equal((await M.Employee.findOne({ organizationId: orgA._id, _id: empA._id }).lean()).hideFromDirectory, true);
+  assert.ok(!(await emp.get("/api/org/directory")).data.some((person) => person.cardUrl.endsWith("/rahul-sharma")));
+  assert.equal((await emp.patch("/api/me/card", { hideFromDirectory: false })).status, 200);
   assert.equal((await emp.patch("/api/me/card", { designation: "CEO" })).status, 403, "designation not editable by default");
   assert.equal((await emp.patch("/api/me/card", { organizationId: orgB._id })).status, 403);
   assert.equal((await emp.get("/api/org/employees")).status, 403);
