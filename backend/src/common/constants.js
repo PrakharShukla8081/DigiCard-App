@@ -54,6 +54,7 @@ export const EVENT_TYPES = [
   "social_click",
   "vcard_download",
   "enquiry",
+  "contact_exchange",
   "qr_scan",
 ];
 export const EVENT_SOURCES = ["qr", "link", "direct", "nfc", "email", "whatsapp"];

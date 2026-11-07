@@ -16,6 +16,7 @@ export function SiteFooter() {
             <Link href="/#features" className="hover:text-fg">Features</Link>
             <Link href="/pricing" className="hover:text-fg">Pricing</Link>
             <Link href="/#faq" className="hover:text-fg">FAQ</Link>
+            <Link href="/nfc" className="hover:text-fg">How NFC cards work</Link>
           </div>
         </div>
         <div>

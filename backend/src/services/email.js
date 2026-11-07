@@ -107,6 +107,24 @@ export const templates = {
       text: `New enquiry for ${employeeName}\n\n${["name", "email", "phone", "company", "message"].map((k) => `${k}: ${enquiry[k] || ""}`).join("\n")}`,
     };
   },
+  contactExchange({ employeeName, orgName, enquiry, adminLink }) {
+    const rows = [
+      ["Name", enquiry.name],
+      ["Email", enquiry.email],
+      ["Phone", enquiry.phone],
+      ["Company", enquiry.company],
+      ["Designation", enquiry.designation],
+      ["Note", enquiry.note],
+    ]
+      .filter(([, value]) => value)
+      .map(([key, value]) => `<tr><td style="padding:4px 12px 4px 0;color:#64748B">${esc(key)}</td><td style="padding:4px 0">${esc(value)}</td></tr>`)
+      .join("");
+    return {
+      subject: `${enquiry.name.replace(/[\r\n]/g, " ")} shared their contact with you`,
+      html: layout(`${enquiry.name} shared their contact with you`, `<p>${esc(enquiry.name)} shared their details with ${esc(employeeName)} at ${esc(orgName)}.</p><table>${rows}</table>`, adminLink ? { url: adminLink, label: "View contacts" } : null),
+      text: `${enquiry.name} shared their contact with you\n\n${["name", "email", "phone", "company", "designation", "note"].map((key) => `${key}: ${enquiry[key] || ""}`).join("\n")}`,
+    };
+  },
   leadRequest({ lead, adminLink }) {
     const rows = [
       ["Name", lead.name],

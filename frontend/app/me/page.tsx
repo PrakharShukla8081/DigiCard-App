@@ -15,6 +15,7 @@ import { QrBlock } from "@/components/card/qr-tools";
 import { ShareKit } from "@/components/card/share-kit";
 import { Legend, TrendChart } from "@/components/charts/trend";
 import { InstallAppButton } from "@/components/pwa/install-app-button";
+import { NfcLinkPanel } from "@/components/card/nfc-link-panel";
 
 type Me = { employee: { name: string; url: string; slug: string; employeeCode: string; cardStatus: string; isPublished: boolean; photoUrl: string }; editableFields: string[]; card: CardPayload };
 type Stats = { totals: Record<string, number>; series: { day: string; views: number; shares: number; saves: number }[] };
@@ -101,6 +102,7 @@ export default function MyCardPage() {
             </div>
           </Panel>
           <ShareKit card={card} />
+          <NfcLinkPanel link={`${e.url}?src=nfc`} showInstructions />
           <Panel className="p-5">
             <div className="grid items-center gap-5 sm:grid-cols-[auto_minmax(0,1fr)]">
               <QrBlock url={e.url} fileName={e.slug} size={150} style={{ ...card.company.qr, logoUrl: card.company.logoUrl }} name={card.employee.name} />

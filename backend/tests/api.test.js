@@ -438,6 +438,8 @@ test("public card shows only whitelisted data and tracks events", async () => {
   for (const type of ["view", "view", "share", "whatsapp_click"]) {
     await anon.post("/api/public/events", { orgSlug: "abc-company", slug: "rahul-sharma", type, source: "qr" });
   }
+  await anon.post("/api/public/events", { orgSlug: "abc-company", slug: "rahul-sharma", type: "view", source: "nfc" });
+  assert.equal(await M.AnalyticsEvent.countDocuments({ organizationId: orgA._id, employeeId: empA._id, type: "view", source: "nfc" }), 1);
   const v = await anon.get("/api/public/cards/abc-company/rahul-sharma/vcard", { raw: true });
   assert.match(await v.text(), /FN:Rahul Sharma/);
   const q = await anon.get("/api/public/cards/abc-company/rahul-sharma/qr.png", { raw: true });
@@ -451,11 +453,13 @@ test("public card shows only whitelisted data and tracks events", async () => {
   assert.equal(honey.status, 201);
 
   const a = await adminA.get("/api/org/analytics?range=7d");
-  assert.equal(a.data.totals.view, 2);
+  assert.equal(a.data.totals.view, 3);
   assert.equal(a.data.totals.unique, 1);
   assert.equal(a.data.totals.qr_scan, 2);
   assert.equal(a.data.totals.vcard_download, 1);
   assert.equal(a.data.totals.enquiry, 1);
+  assert.equal(a.data.sourceBreakdown.nfc, 1);
+  assert.equal(a.data.sourceBreakdown.qr, 2);
   assert.equal(a.data.employees[0].name, "Rahul Sharma");
   const enquiries = await adminA.get("/api/org/enquiries");
   assert.equal(enquiries.data.length, 1, "honeypot enquiry dropped");
@@ -464,6 +468,15 @@ test("public card shows only whitelisted data and tracks events", async () => {
   assert.ok(enquiries.data[0].consentAt);
   const exportResponse = await adminA.get("/api/org/enquiries/export.csv", { raw: true });
   assert.match(await exportResponse.text(), /Consent,Consent at/);
+  const employeesA = await adminA.get("/api/org/employees/export.csv", { raw: true });
+  const employeesCsvA = await employeesA.text();
+  assert.match(employeesCsvA, /Card URL,NFC URL/);
+  assert.match(employeesCsvA, /http:\/\/localhost:3000\/c\/abc-company\/rahul-sharma\?src=nfc/);
+  assert.doesNotMatch(employeesCsvA, /xyz-company/);
+  const employeesB = await adminB.get("/api/org/employees/export.csv", { raw: true });
+  const employeesCsvB = await employeesB.text();
+  assert.match(employeesCsvB, /xyz-company/);
+  assert.doesNotMatch(employeesCsvB, /abc-company/);
   // B cannot see A's enquiries or analytics
   assert.equal((await adminB.get("/api/org/enquiries")).data.length, 0);
   assert.equal((await adminB.get("/api/org/analytics?range=7d")).data.totals.view, 0);
@@ -480,6 +493,69 @@ test("enquiry consent is required and stored with the organization wording", asy
   assert.equal(stored.consent, true);
   assert.match(stored.consentText, /ABC Company/);
   assert.ok(stored.consentAt instanceof Date);
+
+  const hindi = await anon.post("/api/public/enquiries", {
+    orgSlug: "abc-company", slug: "rahul-sharma", name: "Hindi Consent", phone: "9876512345", consent: true, lang: "hi",
+  });
+  assert.equal(hindi.status, 201, hindi.message);
+  const hindiStored = await M.Enquiry.findOne({ organizationId: orgA._id, name: "Hindi Consent" }).lean();
+  assert.equal(hindiStored.consentText, "मैं सहमत हूँ कि ABC Company इस पूछताछ के संबंध में मुझसे संपर्क कर सकता है।");
+
+  const invalidLanguage = await anon.post("/api/public/enquiries", {
+    orgSlug: "abc-company", slug: "rahul-sharma", name: "Fallback Consent", phone: "9876512345", consent: true, lang: "fr",
+  });
+  assert.equal(invalidLanguage.status, 201, invalidLanguage.message);
+  const fallbackStored = await M.Enquiry.findOne({ organizationId: orgA._id, name: "Fallback Consent" }).lean();
+  assert.equal(fallbackStored.consentText, "I agree that ABC Company may contact me about this enquiry.");
+});
+
+test("card language auto follows Accept-Language and supports explicit defaults", async () => {
+  assert.equal((await adminA.patch("/api/org/settings/card", { cardLanguage: "auto" })).status, 200);
+  const hindi = await anon.get("/api/public/cards/abc-company/rahul-sharma", { headers: { "Accept-Language": "hi-IN,hi;q=0.9,en;q=0.8" } });
+  assert.equal(hindi.data.company.cardLanguage, "hi");
+  const english = await anon.get("/api/public/cards/abc-company/rahul-sharma", { headers: { "Accept-Language": "fr-FR,hi;q=0.4,en;q=0.9" } });
+  assert.equal(english.data.company.cardLanguage, "en");
+  assert.equal((await adminA.patch("/api/org/settings/card", { cardLanguage: "hi" })).data.cardSettings.cardLanguage, "hi");
+  assert.equal((await adminA.patch("/api/org/settings/card", { cardLanguage: "en" })).data.cardSettings.cardLanguage, "en");
+});
+
+test("contact exchange validates contact and consent, stays tenant-scoped, filters by kind, and records analytics", async () => {
+  const missingContact = await anon.post("/api/public/enquiries", {
+    orgSlug: "abc-company", slug: "rahul-sharma", kind: "exchange", name: "Exchange Visitor", consent: true,
+  });
+  assert.equal(missingContact.status, 400);
+
+  const missingConsent = await anon.post("/api/public/enquiries", {
+    orgSlug: "abc-company", slug: "rahul-sharma", kind: "exchange", name: "Exchange Visitor", email: "visitor@example.test",
+  });
+  assert.equal(missingConsent.status, 400);
+
+  const created = await anon.post("/api/public/enquiries", {
+    orgSlug: "abc-company", slug: "rahul-sharma", kind: "exchange", name: "Exchange Visitor",
+    email: "visitor@example.test", company: "Visitor Co", designation: "Director", note: "Let's connect", consent: true,
+  });
+  assert.equal(created.status, 201, JSON.stringify(created));
+  assert.match(created.message, /^Sent! Rahul will get your details\./);
+
+  const stored = await M.Enquiry.findOne({ organizationId: orgA._id, name: "Exchange Visitor" }).lean();
+  assert.equal(stored.kind, "exchange");
+  assert.equal(stored.designation, "Director");
+  assert.equal(stored.note, "Let's connect");
+  assert.match(stored.consentText, /contact exchange/);
+  assert.equal(stored.consent, true);
+
+  const contacts = await adminA.get("/api/org/enquiries?kind=exchange");
+  assert.equal(contacts.data.length, 1);
+  assert.equal(contacts.data[0].kind, "exchange");
+  const enquiries = await adminA.get("/api/org/enquiries?kind=enquiry");
+  assert.equal(enquiries.data.some((item) => item.name === "Exchange Visitor"), false);
+  assert.equal(enquiries.data.find((item) => item.name === "Visitor")?.kind, "enquiry");
+  assert.equal((await adminB.get("/api/org/enquiries?kind=exchange")).data.length, 0);
+  assert.equal(await M.AnalyticsEvent.countDocuments({ organizationId: orgA._id, employeeId: empA._id, type: "contact_exchange" }), 1);
+  assert.equal((await adminA.get("/api/org/analytics?range=7d")).data.totals.contact_exchange, 1);
+
+  const exportResponse = await adminA.get("/api/org/enquiries/export.csv", { raw: true });
+  assert.match(await exportResponse.text(), /Date,Kind,Employee/);
 });
 
 test("privacy policy URL accepts only HTTPS URLs", async () => {

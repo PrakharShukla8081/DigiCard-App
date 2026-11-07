@@ -15,6 +15,7 @@ import { Chip, CopyField, Dialog, InviteResult, PageHeader, Panel, PanelHeader, 
 import { CardView } from "@/components/card/card-view";
 import { PhoneFrame } from "@/components/card/phone-frame";
 import { QrBlock } from "@/components/card/qr-tools";
+import { NfcLinkPanel } from "@/components/card/nfc-link-panel";
 
 type Form = {
   employeeCode: string;
@@ -347,6 +348,7 @@ export function EmployeeEditor({ employee, base, onSaved }: { employee?: Employe
         </form>
 
         <aside className={`flex flex-col gap-4 lg:sticky lg:top-20 ${pane === "edit" ? "max-lg:hidden" : ""}`}>
+          {!isNew && <NfcLinkPanel link={`${employee!.url}?src=nfc`} />}
           <div className="flex items-center justify-between">
             <span className="eyebrow">Live preview</span>
             {!isNew && (f.cardStatus === "inactive" ? <Chip tone="bad">Inactive</Chip> : f.isPublished ? <Chip tone="ok">Live</Chip> : <Chip tone="warn">Unpublished</Chip>)}

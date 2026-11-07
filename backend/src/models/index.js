@@ -117,6 +117,7 @@ const organizationSchema = new Schema(
     },
     cardSettings: {
       template: { type: String, enum: CARD_TEMPLATES, default: "classic" },
+      cardLanguage: { type: String, enum: ["en", "hi", "auto"], default: "en" },
       allowEmployeeTemplate: { type: Boolean, default: false },
       sections: {
         about: { type: Boolean, default: true },
@@ -307,10 +308,13 @@ const enquirySchema = new Schema(
   {
     organizationId: { type: ObjectId, ref: "Organization", required: true },
     employeeId: { type: ObjectId, ref: "Employee", required: true },
+    kind: { type: String, enum: ["enquiry", "exchange"], default: "enquiry" },
     name: { type: String, trim: true, maxlength: 120, required: true },
     email: { type: String, trim: true, lowercase: true, maxlength: 254, default: "" },
     phone: { type: String, trim: true, maxlength: 20, default: "" },
     company: { type: String, trim: true, maxlength: 120, default: "" },
+    designation: { type: String, trim: true, maxlength: 100, default: "" },
+    note: { type: String, trim: true, maxlength: 300, default: "" },
     message: { type: String, trim: true, maxlength: 2000, default: "" },
     consent: { type: Boolean, default: false },
     consentText: { type: String, trim: true, maxlength: 300, default: "" },

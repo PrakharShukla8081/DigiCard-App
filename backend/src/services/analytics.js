@@ -54,9 +54,10 @@ export async function orgAnalytics(organizationId, { from, to, employeeId, withE
   const match = { organizationId: new mongoose.Types.ObjectId(String(organizationId)), day: { $gte: from, $lte: to } };
   if (employeeId) match.employeeId = new mongoose.Types.ObjectId(String(employeeId));
 
-  const [series, perEmp] = await Promise.all([
+  const [series, perEmp, sourceRows] = await Promise.all([
     groupSum(DailyStat, [{ $match: match }], "$day", sumFields, null, { _id: 1 }),
     withEmployees ? groupSum(DailyStat, [{ $match: match }], "$employeeId", sumFields) : [],
+    groupSum(AnalyticsEvent, [{ $match: { ...match, type: "view" } }], "$source", { visits: 1 }),
   ]);
 
   const zero = Object.fromEntries(["unique", ...EVENT_TYPES].map((k) => [k, 0]));
@@ -99,5 +100,6 @@ export async function orgAnalytics(organizationId, { from, to, employeeId, withE
       .sort((a, b) => b.score - a.score)
       .slice(0, topN);
   }
-  return { range: { from, to }, totals, series: days, employees };
+  const sourceBreakdown = Object.fromEntries(sourceRows.map((row) => [row._id || "direct", row.visits || 0]));
+  return { range: { from, to }, totals, series: days, employees, sourceBreakdown };
 }

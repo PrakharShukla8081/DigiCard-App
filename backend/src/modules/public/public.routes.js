@@ -59,8 +59,9 @@ router.get("/directory/:orgSlug", directoryLimiter, async (req, res) => {
 
 router.get("/cards/:orgSlug/:empSlug", cardLimiter, async (req, res) => {
   const { org, employee, ent } = await resolveCard(req.params.orgSlug, req.params.empSlug);
-  const card = await buildCardPayload({ org, employee, ent, content: await loadCardContent(org._id, ent) });
+  const card = await buildCardPayload({ org, employee, ent, content: await loadCardContent(org._id, ent), acceptLanguage: req.headers["accept-language"] || "" });
   res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=120");
+  res.setHeader("Vary", "Accept-Language");
   res.json({ success: true, data: card });
 });
 
@@ -98,7 +99,7 @@ router.post("/events", eventLimiter, async (req, res) => {
     z.object({
       orgSlug: z.string().max(80),
       slug: z.string().max(80),
-      type: z.enum(EVENT_TYPES.filter((t) => !["enquiry", "vcard_download", "qr_scan"].includes(t))),
+      type: z.enum(EVENT_TYPES.filter((t) => !["enquiry", "contact_exchange", "vcard_download", "qr_scan"].includes(t))),
       source: z.string().max(20).optional(),
       meta: z.string().max(40).optional(),
     }),
@@ -121,11 +122,15 @@ router.post("/enquiries", enquiryLimiter, async (req, res) => {
     z.object({
       orgSlug: z.string().max(80),
       slug: z.string().max(80),
+      kind: z.enum(["enquiry", "exchange"]).optional().default("enquiry"),
+      lang: z.enum(["en", "hi"]).catch("en").default("en"),
       name: z.string().trim().min(2, "Please enter your name").max(120),
       email: z.union([z.string().trim().toLowerCase().email("Enter a valid email"), z.literal("")]).optional(),
       phone: z.string().trim().max(20).optional(),
       company: z.string().trim().max(120).optional(),
+      designation: z.string().trim().max(100).optional(),
       message: z.string().trim().max(2000).optional(),
+      note: z.string().trim().max(300).optional(),
       consent: z.boolean().optional(),
       website: z.string().max(200).optional(), // honeypot: real users never fill this hidden field
       source: z.string().max(20).optional(),
@@ -147,22 +152,29 @@ router.post("/enquiries", enquiryLimiter, async (req, res) => {
     company: b.company || "",
     message: b.message || "",
     consent: true,
-    consentText: `I agree that ${org.name} may contact me about this enquiry.`,
+    kind: b.kind,
+    designation: b.designation || "",
+    note: b.note || "",
+    consentText: b.lang === "hi"
+      ? `मैं सहमत हूँ कि ${org.name} इस ${b.kind === "exchange" ? "संपर्क साझा करने" : "पूछताछ"} के संबंध में मुझसे संपर्क कर सकता है।`
+      : `I agree that ${org.name} may contact me about this ${b.kind === "exchange" ? "contact exchange" : "enquiry"}.`,
     consentAt: new Date(),
     source: sourceOf(b.source),
   });
   const ua = String(req.headers["user-agent"] || "");
-  await trackEvent({ org, employee, type: "enquiry", source: sourceOf(b.source), visitor: visitorHash(req.ip, ua, dayKey(new Date(), org.timezone)) });
+  await trackEvent({ org, employee, type: b.kind === "exchange" ? "contact_exchange" : "enquiry", source: sourceOf(b.source), visitor: visitorHash(req.ip, ua, dayKey(new Date(), org.timezone)) });
 
   // Notify the employee (and company admins) by email when configured.
   const recipients = new Set();
   if (employee.workEmail) recipients.add(employee.workEmail);
   const admins = await User.find({ organizationId: org._id, role: ROLES.COMPANY_ADMIN, status: "active" }).select("email").lean();
   admins.forEach((a) => recipients.add(a.email));
-  const t = templates.enquiry({ employeeName: fullName(employee), orgName: org.name, enquiry, adminLink: `${env.frontendUrl}/admin/enquiries` });
+  const t = b.kind === "exchange"
+    ? templates.contactExchange({ employeeName: fullName(employee), orgName: org.name, enquiry, adminLink: `${env.frontendUrl}/admin/enquiries` })
+    : templates.enquiry({ employeeName: fullName(employee), orgName: org.name, enquiry, adminLink: `${env.frontendUrl}/admin/enquiries` });
   for (const to of recipients) sendEmail({ to, ...t }).catch(() => {});
 
-  res.status(201).json({ success: true, message: "Thank you! Your enquiry has been sent." });
+  res.status(201).json({ success: true, message: b.kind === "exchange" ? `Sent! ${employee.firstName} will get your details.` : "Thank you! Your enquiry has been sent." });
 });
 
 export default router;

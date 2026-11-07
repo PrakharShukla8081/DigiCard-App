@@ -19,6 +19,7 @@ type A = {
   advanced: boolean;
   totals: Totals;
   previousTotals: Totals;
+  sourceBreakdown: Record<string, number>;
   series: { day: string; views: number; unique: number; shares: number; saves: number; enquiries: number; qr: number }[];
   employees: { employeeId: string; name: string; designation: string; department: string; photoUrl: string; views: number; unique: number; shares: number; saves: number; calls: number; whatsapp: number; emails: number; enquiries: number; qr: number }[];
 };
@@ -42,7 +43,17 @@ const METRICS: { key: string; label: string; hint?: string }[] = [
   { key: "website_click", label: "Website taps" },
   { key: "social_click", label: "Social link taps" },
   { key: "enquiry", label: "Enquiries", hint: "Form submissions" },
+  { key: "contact_exchange", label: "Contact exchanges", hint: "Visitors who shared their contact details" },
 ];
+
+const SOURCES = [
+  ["qr", "QR"],
+  ["nfc", "NFC"],
+  ["link", "Link"],
+  ["direct", "Direct"],
+  ["email", "Email"],
+  ["whatsapp", "WhatsApp"],
+] as const;
 
 function delta(cur: number, prev: number) {
   if (!prev) return cur ? <span className="font-bold text-ok">new</span> : <span className="text-muted">—</span>;
@@ -122,6 +133,17 @@ export default function AnalyticsPage() {
             <PanelHeader title="Daily trend" sub={`${data.range.from} to ${data.range.to}`} actions={<Legend series={SERIES} />} />
             <div className="px-3 pb-3">
               <TrendChart data={data.series} series={SERIES} height={280} />
+            </div>
+          </Panel>
+          <Panel className="mt-4">
+            <PanelHeader title="Visit sources" sub="Card views by the source link parameter." />
+            <div className="grid grid-cols-2 gap-3 px-5 pb-5 sm:grid-cols-3 lg:grid-cols-6">
+              {SOURCES.map(([key, label]) => (
+                <div key={key} className="rounded-xl bg-surface-2 p-3">
+                  <div className="eyebrow">{label}</div>
+                  <div className="tabular mt-1 text-xl font-bold">{fmtNum(data.sourceBreakdown?.[key] || 0)}</div>
+                </div>
+              ))}
             </div>
           </Panel>
           {advanced ? (

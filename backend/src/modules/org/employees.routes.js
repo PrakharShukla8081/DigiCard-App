@@ -128,8 +128,8 @@ router.get("/export.csv", async (req, res) => {
   const { org } = req.tenant;
   const items = await Employee.find(buildFilter(org._id, req.query)).sort({ employeeCode: 1 }).lean();
   const csv = toCsv(
-    ["Employee ID", "First Name", "Last Name", "Designation", "Department", "Work Email", "Mobile Number", "WhatsApp Number", "Location", "Card Status", "Published", "Card URL", "Views", "Shares", "Contact Saves", "Enquiries"],
-    items.map((e) => [e.employeeCode, e.firstName, e.lastName, e.designation, e.department, e.workEmail, e.mobile, e.whatsapp, e.location, e.cardStatus, e.isPublished ? "yes" : "no", cardUrl(org.slug, e.slug), e.stats?.views || 0, e.stats?.shares || 0, e.stats?.saves || 0, e.stats?.enquiries || 0])
+    ["Employee ID", "First Name", "Last Name", "Designation", "Department", "Work Email", "Mobile Number", "WhatsApp Number", "Location", "Card Status", "Published", "Card URL", "NFC URL", "Views", "Shares", "Contact Saves", "Enquiries"],
+    items.map((e) => [e.employeeCode, e.firstName, e.lastName, e.designation, e.department, e.workEmail, e.mobile, e.whatsapp, e.location, e.cardStatus, e.isPublished ? "yes" : "no", cardUrl(org.slug, e.slug), `${cardUrl(org.slug, e.slug)}?src=nfc`, e.stats?.views || 0, e.stats?.shares || 0, e.stats?.saves || 0, e.stats?.enquiries || 0])
   );
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="${org.slug}-employees.csv"`);

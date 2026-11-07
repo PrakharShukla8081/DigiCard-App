@@ -1,19 +1,23 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import type { CardPayload } from "@/lib/types";
 import { PublicCard } from "./public-card";
+import { CardStatusMessage } from "@/components/card/card-status-message";
 
 const BACKEND = (process.env.BACKEND_URL || "http://localhost:5000").replace(/\/+$/, "");
 const SLUG = /^[a-z0-9-]{1,80}$/;
 
 type Params = { org: string; slug: string };
 
-async function loadCard(org: string, slug: string): Promise<{ card: CardPayload | null; unavailable: boolean }> {
+async function loadCard(org: string, slug: string, acceptLanguage: string): Promise<{ card: CardPayload | null; unavailable: boolean }> {
   if (!SLUG.test(org) || !SLUG.test(slug)) return { card: null, unavailable: false };
   try {
+    const requestHeaders = new Headers({ "Accept-Language": acceptLanguage });
+    if (process.env.INTERNAL_API_KEY) requestHeaders.set("x-internal-key", process.env.INTERNAL_API_KEY);
     const res = await fetch(`${BACKEND}/api/public/cards/${org}/${slug}`, {
-      headers: process.env.INTERNAL_API_KEY ? { "x-internal-key": process.env.INTERNAL_API_KEY } : {},
-      next: { revalidate: 30 },
+      headers: requestHeaders,
+      cache: "no-store",
     });
     if (res.status === 404) {
       const j = await res.json().catch(() => ({}));
@@ -31,7 +35,8 @@ const abs = (u: string) => (!u ? undefined : /^https?:\/\//.test(u) ? u : `${pro
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { org, slug } = await params;
-  const { card } = await loadCard(org, slug);
+  const requestHeaders = await headers();
+  const { card } = await loadCard(org, slug, requestHeaders.get("accept-language") || "");
   if (!card) return { title: "Card not available", robots: { index: false } };
   const e = card.employee;
   const title = `${e.name}${e.designation ? ` — ${e.designation}` : ""} | ${card.company.name}`;
@@ -49,14 +54,14 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 export default async function CardPage({ params, searchParams }: { params: Promise<Params>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { org, slug } = await params;
   const sp = await searchParams;
-  const { card, unavailable } = await loadCard(org, slug);
+  const requestHeaders = await headers();
+  const { card, unavailable } = await loadCard(org, slug, requestHeaders.get("accept-language") || "");
   if (!card) {
     if (unavailable)
       return (
         <main className="grid min-h-dvh place-items-center px-6 text-center">
           <div>
-            <h1 className="text-2xl font-bold">This card is not available right now</h1>
-            <p className="mt-2 text-muted">The card may be paused by its company. Please try again later or contact the person directly.</p>
+            <CardStatusMessage kind="expired" />
           </div>
         </main>
       );

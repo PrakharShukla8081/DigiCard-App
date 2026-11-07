@@ -157,16 +157,20 @@ router.get("/enquiries", async (req, res) => {
   const { org } = req.tenant;
   const { page, limit, skip } = pageParams(req.query);
   const q = { organizationId: org._id };
+  const and = [];
+  if (req.query.kind === "exchange") q.kind = "exchange";
+  else if (req.query.kind === "enquiry") and.push({ $or: [{ kind: "enquiry" }, { kind: { $exists: false } }] });
   if (["new", "contacted", "closed"].includes(req.query.status)) q.status = req.query.status;
   if (req.query.employeeId && mongoose.isValidObjectId(req.query.employeeId)) q.employeeId = req.query.employeeId;
   if (req.query.search) {
     const rx = { $regex: escapeRegex(String(req.query.search).slice(0, 80)), $options: "i" };
-    q.$or = [{ name: rx }, { email: rx }, { phone: rx }, { company: rx }];
+    and.push({ $or: [{ name: rx }, { email: rx }, { phone: rx }, { company: rx }] });
   }
+  if (and.length) q.$and = and;
   const [items, total] = await Promise.all([Enquiry.find(q).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(), Enquiry.countDocuments(q)]);
   const emps = await Employee.find({ organizationId: org._id, _id: { $in: items.map((i) => i.employeeId) } }).select("firstName lastName designation").lean();
   const em = Object.fromEntries(emps.map((e) => [String(e._id), e]));
-  res.json({ success: true, data: items.map((i) => ({ ...i, employeeName: em[String(i.employeeId)] ? fullName(em[String(i.employeeId)]) : "Deleted employee" })), pagination: { page, limit, total } });
+  res.json({ success: true, data: items.map((i) => ({ ...i, kind: i.kind || "enquiry", employeeName: em[String(i.employeeId)] ? fullName(em[String(i.employeeId)]) : "Deleted employee" })), pagination: { page, limit, total } });
 });
 
 router.patch("/enquiries/:id", async (req, res) => {
@@ -191,8 +195,8 @@ router.get("/enquiries/export.csv", async (req, res) => {
   const emps = await Employee.find({ organizationId: org._id }).select("firstName lastName").lean();
   const em = Object.fromEntries(emps.map((e) => [String(e._id), fullName(e)]));
   const csv = toCsv(
-    ["Date", "Employee", "Name", "Email", "Phone", "Company", "Message", "Status", "Consent", "Consent at"],
-    items.map((i) => [new Date(i.createdAt).toISOString(), em[String(i.employeeId)] || "", i.name, i.email, i.phone, i.company, i.message, i.status, i.consent ? "Yes" : "No", i.consentAt ? new Date(i.consentAt).toISOString() : ""])
+    ["Date", "Kind", "Employee", "Name", "Email", "Phone", "Company", "Designation", "Message", "Note", "Status", "Consent", "Consent at"],
+    items.map((i) => [new Date(i.createdAt).toISOString(), i.kind || "enquiry", em[String(i.employeeId)] || "", i.name, i.email, i.phone, i.company, i.designation, i.message, i.note, i.status, i.consent ? "Yes" : "No", i.consentAt ? new Date(i.consentAt).toISOString() : ""])
   );
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", 'attachment; filename="enquiries.csv"');

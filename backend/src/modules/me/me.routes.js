@@ -145,8 +145,11 @@ router.get("/stats", async (req, res) => {
 });
 
 router.get("/enquiries", async (req, res) => {
-  const items = await Enquiry.find({ organizationId: req.tenant.organizationId, employeeId: req.auth.employeeId }).sort({ createdAt: -1 }).limit(100).lean();
-  res.json({ success: true, data: items });
+  const q = { organizationId: req.tenant.organizationId, employeeId: req.auth.employeeId };
+  if (req.query.kind === "exchange") q.kind = "exchange";
+  else if (req.query.kind === "enquiry") q.$or = [{ kind: "enquiry" }, { kind: { $exists: false } }];
+  const items = await Enquiry.find(q).sort({ createdAt: -1 }).limit(100).lean();
+  res.json({ success: true, data: items.map((item) => ({ ...item, kind: item.kind || "enquiry" })) });
 });
 
 export default router;

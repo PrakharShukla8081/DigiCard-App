@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import type { CardPayload } from "@/lib/types";
 import { qrDefaults, qrPng } from "@/lib/qr";
 import { Button } from "@/components/ui/button";
-import { Checkbox, Field, Input, Textarea } from "@/components/ui/field";
+import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/field";
 import { ErrorBox, PageHeader, PageLoader, Panel, PanelHeader, Segmented, ToggleRow } from "@/components/ui/misc";
 import { CardView } from "@/components/card/card-view";
 import { PhoneFrame } from "@/components/card/phone-frame";
@@ -22,7 +22,7 @@ type Settings = {
   directory: { enabled: boolean; public: boolean };
   contact: { email: string; phone: string; website: string; address: string; gstin: string };
   branding: { logoUrl: string; primaryColor: string; secondaryColor: string; description: string; tagline: string; social: Record<string, string>; qr: ReturnType<typeof qrDefaults> };
-  cardSettings: { template: string; allowEmployeeTemplate: boolean; sections: Record<string, boolean>; employeeEditableFields: string[]; allowEmployeeLogin: boolean };
+  cardSettings: { template: string; cardLanguage: "en" | "hi" | "auto"; allowEmployeeTemplate: boolean; sections: Record<string, boolean>; employeeEditableFields: string[]; allowEmployeeLogin: boolean };
 };
 
 const TEMPLATES = [
@@ -98,7 +98,7 @@ export default function BrandingPage() {
   const custom = hasFeature("customBranding");
 
   useEffect(() => {
-    if (data) setS({ ...data.settings, directory: data.settings.directory || { enabled: false, public: false }, branding: { ...data.settings.branding, qr: qrDefaults(data.settings.branding.qr) } });
+    if (data) setS({ ...data.settings, directory: data.settings.directory || { enabled: false, public: false }, cardSettings: { ...data.settings.cardSettings, cardLanguage: data.settings.cardSettings.cardLanguage || "en" }, branding: { ...data.settings.branding, qr: qrDefaults(data.settings.branding.qr) } });
   }, [data]);
 
   const preview = useMemo<CardPayload | null>(() => {
@@ -119,6 +119,7 @@ export default function BrandingPage() {
       company: {
         ...b.company,
         name: s.name,
+        cardLanguage: s.cardSettings.cardLanguage === "hi" ? "hi" : "en",
         privacyPolicyUrl: s.privacyPolicyUrl,
         logoUrl: custom ? s.branding.logoUrl : "",
         primaryColor: custom ? s.branding.primaryColor : "#4F46E5",
@@ -166,6 +167,7 @@ export default function BrandingPage() {
         employeeEditableFields: s!.cardSettings.employeeEditableFields,
         allowEmployeeLogin: s!.cardSettings.allowEmployeeLogin,
         allowEmployeeTemplate: s!.cardSettings.allowEmployeeTemplate,
+        cardLanguage: s!.cardSettings.cardLanguage,
       };
       if (custom) card.template = s!.cardSettings.template;
       await api.patch("/org/settings/card", card);
@@ -362,6 +364,19 @@ export default function BrandingPage() {
                   <Input value={s.branding.social?.[k] || ""} onChange={(e) => setB({ social: { ...s.branding.social, [k]: e.target.value } })} placeholder="https://..." />
                 </Field>
               ))}
+            </div>
+          </Panel>
+
+          <Panel>
+            <PanelHeader title="Public card language" sub="Choose a default language. Visitors can switch between English and Hindi on the card." />
+            <div className="px-5 pb-5">
+              <Field label="Default card language">
+                <Select value={s.cardSettings.cardLanguage} onChange={(e) => setCard({ cardLanguage: e.target.value as Settings["cardSettings"]["cardLanguage"] })}>
+                  <option value="en">English</option>
+                  <option value="hi">Hindi (हिंदी)</option>
+                  <option value="auto">Automatic (visitor browser language)</option>
+                </Select>
+              </Field>
             </div>
           </Panel>
 

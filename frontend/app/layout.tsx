@@ -1,9 +1,17 @@
 import type { Metadata, Viewport } from "next";
 import { Toaster } from "sonner";
+import { Noto_Sans_Devanagari } from "next/font/google";
 import { AuthProvider } from "@/lib/auth";
 import { ConfirmProvider } from "@/components/ui/misc";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import "./globals.css";
+
+const devanagari = Noto_Sans_Devanagari({
+  subsets: ["devanagari", "latin"],
+  variable: "--font-devanagari",
+  display: "swap",
+  preload: false,
+});
 
 export const metadata: Metadata = {
   title: { default: "Beno Digital Card", template: "%s · Beno Digital Card" },
@@ -30,7 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap"
         />
       </head>
-      <body>
+      <body className={devanagari.variable}>
         <AuthProvider>
           <ConfirmProvider>{children}</ConfirmProvider>
         </AuthProvider>

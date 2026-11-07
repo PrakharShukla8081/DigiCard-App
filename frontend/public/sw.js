@@ -21,7 +21,6 @@ function isStaticAsset(url, request) {
   if (url.origin === self.location.origin) {
     return (
       url.pathname.startsWith("/_next/static/") ||
-      url.pathname === "/manifest.webmanifest" ||
       url.pathname === "/icon" ||
       url.pathname === "/apple-icon" ||
       url.pathname === "/icon-192" ||

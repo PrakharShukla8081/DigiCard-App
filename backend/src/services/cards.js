@@ -6,6 +6,19 @@ export const fullName = (e) => [e.firstName, e.lastName].filter(Boolean).join(" 
 export const cardUrl = (orgSlug, empSlug) => `${env.publicCardBaseUrl}/c/${orgSlug}/${empSlug}`;
 export const absoluteUrl = (u) => (!u ? "" : /^https?:\/\//i.test(u) ? u : `${env.publicCardBaseUrl}${u.startsWith("/") ? "" : "/"}${u}`);
 
+function preferredCardLanguage(acceptLanguage) {
+  const preferences = String(acceptLanguage || "")
+    .split(",")
+    .map((item, index) => {
+      const [tag, ...params] = item.trim().split(";");
+      const quality = Number(params.find((part) => part.trim().startsWith("q="))?.trim().slice(2) || "1");
+      return { tag: tag.toLowerCase(), quality: Number.isFinite(quality) ? quality : 0, index };
+    })
+    .filter((item) => item.quality > 0)
+    .sort((a, b) => b.quality - a.quality || a.index - b.index);
+  return preferences.find((item) => /^(en|hi)(-|$)/.test(item.tag))?.tag.slice(0, 2) || "en";
+}
+
 /** Load the org-wide content shown on cards (only sections the plan allows). */
 export async function loadCardContent(organizationId, ent) {
   if (!ent.features.productsGallery) return { products: [], gallery: [], videos: [] };
@@ -22,11 +35,15 @@ export async function loadCardContent(organizationId, ent) {
  * Build the PUBLIC card payload. This is a whitelist: only fields meant to be
  * public are copied. Internal fields (ids, stats, login, reminders) never leave.
  */
-export async function buildCardPayload({ org, employee, ent, content }) {
+export async function buildCardPayload({ org, employee, ent, content, acceptLanguage = "" }) {
   const settings = await getPlatformSettings();
   const s = org.cardSettings?.sections || {};
   const custom = ent.features.customBranding;
   const template = custom ? (org.cardSettings?.allowEmployeeTemplate && employee.template) || org.cardSettings?.template || "classic" : "classic";
+  const configuredLanguage = org.cardSettings?.cardLanguage || "en";
+  const cardLanguage = configuredLanguage === "auto"
+    ? preferredCardLanguage(acceptLanguage)
+    : configuredLanguage;
   const sections = {
     about: s.about !== false,
     contact: s.contact !== false,
@@ -64,6 +81,7 @@ export async function buildCardPayload({ org, employee, ent, content }) {
     company: {
       name: org.name,
       privacyPolicyUrl: org.privacyPolicyUrl || "",
+      cardLanguage,
       logoUrl: custom ? b.logoUrl : "",
       qr: custom ? { ...DEFAULT_QR, ...(b.qr || {}) } : DEFAULT_QR,
       primaryColor: custom ? b.primaryColor || "#4F46E5" : "#4F46E5",

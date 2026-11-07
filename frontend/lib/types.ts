@@ -22,6 +22,7 @@ export type CardPayload = {
   social: Social;
   company: {
     name: string;
+    cardLanguage: "en" | "hi";
     privacyPolicyUrl: string;
     logoUrl: string;
     primaryColor: string;

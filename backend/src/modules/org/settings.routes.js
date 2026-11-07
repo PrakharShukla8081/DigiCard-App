@@ -142,6 +142,7 @@ settingsRouter.patch("/card", async (req, res) => {
   const b = parse(
     z.object({
       template: z.enum(CARD_TEMPLATES).optional(),
+      cardLanguage: z.enum(["en", "hi", "auto"]).optional(),
       allowEmployeeTemplate: z.boolean().optional(),
       sections: z.object(Object.fromEntries(CARD_SECTIONS.map((k) => [k, z.boolean().optional()]))).partial().optional(),
       employeeEditableFields: z.array(z.enum(EMPLOYEE_EDITABLE_FIELDS)).optional(),
@@ -153,6 +154,7 @@ settingsRouter.patch("/card", async (req, res) => {
   const org = await Organization.findById(req.tenant.organizationId);
   const cs = org.cardSettings;
   if (b.template) cs.template = b.template;
+  if (b.cardLanguage) cs.cardLanguage = b.cardLanguage;
   if (b.allowEmployeeTemplate !== undefined) cs.allowEmployeeTemplate = b.allowEmployeeTemplate;
   if (b.allowEmployeeLogin !== undefined) cs.allowEmployeeLogin = b.allowEmployeeLogin;
   if (b.employeeEditableFields) cs.employeeEditableFields = [...new Set(b.employeeEditableFields)];

@@ -15,6 +15,15 @@
   line-height: 1.5;
   text-align: left;
 }
+.vc--lang-hi { font-family: var(--font-devanagari), "Manrope", ui-sans-serif, system-ui, sans-serif; line-height: 1.65; }
+.vc--lang-hi .vc-name { font-family: var(--font-devanagari), "Manrope", ui-sans-serif, system-ui, sans-serif; line-height: 1.35; }
+.vc--lang-hi .vc-act { min-width: 0; line-height: 1.35; overflow-wrap: anywhere; }
+.vc--lang-hi .vc-sec h4 { line-height: 1.45; letter-spacing: 0; }
+.vc--lang-hi .vc-consent { line-height: 1.6; }
+.vc--lang-hi .vc-exchange-dialog { line-height: 1.6; }
+.vc-cover .vc-lang-toggle { position: absolute; z-index: 1; top: 14px; left: 14px; display: inline-flex; gap: 2px; align-items: center; padding: 7px 10px; border: 1px solid rgba(255,255,255,.55); border-radius: 9px; background: rgba(255,255,255,.95); color: var(--b1); font-family: inherit; font-size: 12px; font-weight: 700; line-height: 1.2; cursor: pointer; }
+.card-status-hi { font-family: var(--font-devanagari), ui-sans-serif, system-ui, sans-serif; line-height: 1.65; }
+.vc-lang-toggle .active { text-decoration: underline; text-underline-offset: 3px; }
 .vc * { box-sizing: border-box; }
 .vc a { color: inherit; text-decoration: none; }
 .vc button { font: inherit; }
@@ -44,7 +53,7 @@
 .vc-verified svg { width: 15px; height: 15px; flex: none; }
 .vc-loc { display: inline-flex; align-items: center; gap: 4px; color: var(--sub); font-size: 12px; margin-top: 8px; }
 .vc-loc svg { width: 13px; height: 13px; }
-.vc-acts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 20px 22px 6px; }
+.vc-acts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 20px 22px 6px; }
 .vc-act {
   display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--sub);
   cursor: pointer; background: none; border: 0; padding: 0; text-align: center;
@@ -98,6 +107,19 @@
 .vc-form .msg { font-size: 13px; font-weight: 600; }
 .vc-form .msg.ok { color: #047857; }
 .vc-form .msg.err { color: #be123c; }
+.vc-exchange-trigger { display: block; width: calc(100% - 44px); margin: 10px 22px 0; padding: 11px; border: 1px solid var(--b1); border-radius: 10px; background: transparent; color: var(--b1); font: inherit; font-weight: 700; cursor: pointer; }
+.vc-exchange-trigger:disabled { opacity: .5; cursor: default; }
+.vc-exchange-backdrop { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-end; background: rgb(15 23 42 / 55%); }
+.vc-exchange-dialog { position: relative; margin: auto 0 0; width: 100%; max-height: 90dvh; overflow-y: auto; padding: 24px 20px max(20px, env(safe-area-inset-bottom)); border: 0; border-radius: 20px 20px 0 0; background: var(--paper); color: var(--ink); }
+.vc-exchange-dialog::backdrop { background: transparent; }
+.vc-exchange-dialog h3 { margin: 0; font-size: 19px; font-family: inherit; }
+.vc-exchange-description { margin: 4px 0 16px; color: var(--sub); font-size: 13px; }
+.vc-exchange-close { position: absolute; top: 12px; right: 14px; border: 0; background: transparent; color: var(--sub); font-size: 26px; cursor: pointer; }
+.vc-exchange-dialog .msg { font-size: 13px; font-weight: 700; }
+@media (min-width: 640px) {
+  .vc-exchange-backdrop { align-items: center; padding: 20px; }
+  .vc-exchange-dialog { margin: auto; max-width: 440px; border-radius: 20px; }
+}
 .vc-qr { display: flex; align-items: center; gap: 14px; background: var(--tile); border-radius: 14px; padding: 12px; }
 .vc-qr .q { width: 92px; height: 92px; background: #fff; border-radius: 10px; padding: 6px; flex: none; }
 .vc-qr .q img, .vc-qr .q canvas { width: 100%; height: 100%; display: block; }
