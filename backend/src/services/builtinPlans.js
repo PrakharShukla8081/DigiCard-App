@@ -50,7 +50,7 @@ export const BUILTIN_PLANS = [
       ctaType: "trial", ctaLabel: "Start free trial", description: "For professionals who care about how they show up, and about every connection.",
       inheritsLabel: "Everything in Personal, plus",
       featureGroups: [
-        { title: "Cards & branding", items: ["Your colours, logo and card design", "Products, gallery and videos on your card", "A permanent card link", "Branded QR codes (coming soon)"] },
+        { title: "Cards & branding", items: ["Your colours, logo and card design", "Products, gallery and videos on your card", "A permanent card link", "Branded QR codes", "Hindi/English card", "NFC card support"] },
         { title: "Analytics & lead capture", items: ["Card analytics: views, saves and button taps", "Enquiry form with consent"] },
       ],
     },
@@ -71,7 +71,7 @@ export const BUILTIN_PLANS = [
       description: "You buy and deploy. Get your whole team on brand and live the same day.", inheritsLabel: "Everything in Professional, plus",
       featureGroups: [
         { title: "Brand management", items: ["One brand applied to every employee card", "4 card templates to choose from"] },
-        { title: "Team & admin", items: ["Bulk upload from Excel/CSV with error report", "Employee login with admin-controlled editing", "Admin dashboard, team analytics and leaderboard", "Audit log of admin actions", "Company directory"] },
+        { title: "Team & admin", items: ["Bulk upload from Excel/CSV with error report", "Employee login with admin-controlled editing", "Admin dashboard, team analytics and leaderboard", "Audit log of admin actions", "Company directory", "Contact exchange from cards"] },
         { title: "Reminders", items: ["Email and WhatsApp reminders"] },
         { title: "Integrations", items: ["Google and Microsoft sign-in (coming soon)", "Zoho and HubSpot CRM (coming soon)"] },
       ],
@@ -92,7 +92,7 @@ export const BUILTIN_PLANS = [
       description: "We deploy with you, across HR, marketing, IT and procurement.", inheritsLabel: "Everything in Business, plus",
       featureGroups: [
         { title: "Scale & flexibility", items: ["Custom employee limits for thousands of employees", "Bulk rollout support for large teams"] },
-        { title: "Brand control", items: ["Remove Beno branding from cards", "Verified badge on cards (coming soon)", "Your own card domain (coming soon)"] },
+        { title: "Brand control", items: ["Remove Beno branding from cards", "Verified badge on cards", "Your own card domain (coming soon)"] },
         { title: "Procurement & support", items: ["Invoice billing and custom terms", "Guided onboarding and dedicated account support"] },
       ],
     },
