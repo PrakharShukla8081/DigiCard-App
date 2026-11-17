@@ -536,9 +536,16 @@ router.put("/settings", async (req, res) => {
       defaultTrialDays: z.coerce.number().int().min(1).max(365).optional(),
       poweredByText: optStr(80),
       expiryReminderDays: z.coerce.number().int().min(1).max(60).optional(),
+      require2faForSuperAdmin: z.boolean().optional(),
+      enquiryRetentionDays: z.coerce.number().int().min(1).max(3650).optional(),
+      leadRetentionDays: z.coerce.number().int().min(1).max(3650).optional(),
     }),
     req.body
   );
+  if (b.require2faForSuperAdmin) {
+    const unenrolled = await User.exists({ role: ROLES.SUPER_ADMIN, status: "active", totpSecretEnc: null });
+    if (unenrolled) throw badRequest("Every active Super Admin must enable 2FA before enforcing it.");
+  }
   const s = await PlatformSetting.findOneAndUpdate({ key: "platform" }, { $set: b }, { upsert: true, returnDocument: "after" });
   audit(req, { action: "platform.settings_updated", entity: "PlatformSetting", organizationId: null });
   res.json({ success: true, data: s });

@@ -1,11 +1,12 @@
 import crypto from "node:crypto";
 import { JobLock } from "../models/index.js";
 import { logger } from "../common/logger.js";
-import { runDueReminders, runSubscriptionJobs } from "./scheduler.js";
+import { runDueReminders, runRetentionJobs, runSubscriptionJobs } from "./scheduler.js";
 
 const JOBS = {
   reminders: runDueReminders,
   subscriptions: runSubscriptionJobs,
+  retention: runRetentionJobs,
 };
 const LOCK_MS = 10 * 60_000;
 

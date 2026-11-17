@@ -32,18 +32,19 @@ function addLogo(svg: string, logo: string, background: string) {
   const pad = size * 0.2;
   const x = (width - size) / 2;
   const y = (height - size) / 2;
-  return svg.replace("</svg>", `<rect x="${x - pad}" y="${y - pad}" width="${size + pad * 2}" height="${size + pad * 2}" rx="${pad / 2}" fill="${background}"/><image href="${esc(logo)}" x="${x}" y="${y}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/></svg>`);
+  return svg.replace(/<\/svg>\s*$/, `<rect x="${x - pad}" y="${y - pad}" width="${size + pad * 2}" height="${size + pad * 2}" rx="${pad / 2}" fill="${background}"/><image href="${esc(logo)}" x="${x}" y="${y}" width="${size}" height="${size}" preserveAspectRatio="xMidYMid meet"/></svg>`);
 }
 
 function frameSvg(qr: string, style: QrStyle) {
   const size = 1024;
   const frameText = esc(style.frameText);
-  const name = esc(style.name || "");
+  const nameCharacters = Array.from(style.name || "");
+  const name = esc(nameCharacters.length > 32 ? `${nameCharacters.slice(0, 31).join("")}…` : style.name || "");
   const viewBox = qr.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/i);
   const inner = viewBox
-    ? `<svg x="102" y="82" width="820" height="820" viewBox="0 0 ${viewBox[1]} ${viewBox[2]}">${qr.replace(/^<svg\b[^>]*>|<\/svg>$/gi, "")}</svg>`
+    ? `<svg x="102" y="82" width="820" height="820" viewBox="0 0 ${viewBox[1]} ${viewBox[2]}">${qr.replace(/^<svg\b[^>]*>/i, "").replace(/<\/svg>\s*$/i, "")}</svg>`
     : qr;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect x="1" y="1" width="${size - 2}" height="${size - 2}" rx="18" fill="${style.background}" stroke="${style.foreground}" stroke-width="2"/><text x="${size / 2}" y="52" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" font-weight="700" fill="${style.foreground}" textLength="960" lengthAdjust="spacingAndGlyphs">${name}</text>${inner}<text x="${size / 2}" y="988" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" fill="${style.foreground}" textLength="960" lengthAdjust="spacingAndGlyphs">${frameText}</text></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect x="1" y="1" width="${size - 2}" height="${size - 2}" rx="18" fill="${style.background}" stroke="${style.foreground}" stroke-width="2"/><text x="${size / 2}" y="52" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" font-weight="700" fill="${style.foreground}">${name}</text>${inner}<text x="${size / 2}" y="988" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" fill="${style.foreground}">${frameText}</text></svg>`;
 }
 
 export async function qrSvg(url: string, input: Partial<QrStyle> = {}, onLogoError?: () => void) {
@@ -57,7 +58,7 @@ export async function qrSvg(url: string, input: Partial<QrStyle> = {}, onLogoErr
     }
   }
   const target = `${url}?src=qr`;
-  let svg = await QRCode.toString(target, { type: "svg", ...options(style, Boolean(logo)) });
+  let svg = (await QRCode.toString(target, { type: "svg", ...options(style, Boolean(logo)) })).trim();
   svg = svg.replace(/(<svg\b[^>]*>)/i, `$1<metadata>${esc(target)}</metadata>`);
   if (logo) svg = addLogo(svg, logo, style.background);
   return style.frame === "label" ? frameSvg(svg, style) : svg;

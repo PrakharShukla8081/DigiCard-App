@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { api, refreshSession, setAccessToken, setSessionLostHandler, type SessionData } from "./api";
 
 type Role = SessionData["user"]["role"];
+export type LoginResult = SessionData | { challengeRequired: true; challengeToken: string };
 type Ctx = {
   session: SessionData | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<SessionData>;
+  login: (email: string, password: string) => Promise<LoginResult>;
   applySession: (s: SessionData) => void;
   logout: () => Promise<void>;
   reload: () => Promise<void>;
@@ -54,7 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      const res = await api.post<SessionData>("/auth/login", { email, password });
+      const res = await api.post<LoginResult>("/auth/login", { email, password });
+      if ("challengeRequired" in res.data) return res.data;
       applySession(res.data);
       return res.data;
     },

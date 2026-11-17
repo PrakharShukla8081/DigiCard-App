@@ -34,9 +34,9 @@ type Testimonial = { name: string; role: string; company: string; quote: string;
 type PlanData = { currency: "INR" | "USD"; features: { label: string; included: boolean }[] };
 
 const audiences = [
-  { icon: Building2, title: "For your company", items: ["Bulk upload with an error report", "Brand once for every card", "Analytics and leaderboard", "Email and WhatsApp reminders", "Plan seats and audit log"] },
-  { icon: UserRound, title: "For employees", items: ["Own login and allowed-field editing", "Photo and profile details", "WhatsApp and email signature sharing", "Zoom/Teams background and QR download", "A permanent card link"] },
-  { icon: Smartphone, title: "For your customers", items: ["One-tap Call, WhatsApp and Email", "Save contact in one tap", "Products, gallery and videos", "Enquiry form when enabled", "A card that works in any browser"] },
+  { icon: Building2, title: "For your company", items: ["Bulk upload with an error report", "Brand once for every card", "Company directory", "Branded QR codes", "Plan seats and audit log"] },
+  { icon: UserRound, title: "For employees", items: ["Own login and allowed-field editing", "Hindi/English cards", "Install as an app", "WhatsApp and email signature sharing", "A permanent card link"] },
+  { icon: Smartphone, title: "For your customers", items: ["One-tap Call, WhatsApp and Email", "Contact exchange from cards", "NFC card support", "Products, gallery and videos", "A card that works in any browser"] },
 ];
 const faqs = [
   ["Do employees need an app?", "No. Cards and the management experience work in a browser."],

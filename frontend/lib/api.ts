@@ -27,6 +27,7 @@ export type SessionData = {
   user: { id: string; name: string; email: string; role: "super_admin" | "company_admin" | "employee"; organizationId: string | null; employeeId: string | null };
   organization: { id: string; name: string; slug: string; status: string; logoUrl: string; primaryColor: string; directoryEnabled: boolean } | null;
   subscription: { status: string; active: boolean; planName: string | null; endDate: string | null; employeeLimit: number | null; features: Record<string, boolean> } | null;
+  twoFactorSetupRequired?: boolean;
 };
 
 export const setAccessToken = (t: string | null) => (accessToken = t);

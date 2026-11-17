@@ -43,7 +43,7 @@ export default function AcceptInvitePage() {
     try {
       const res = await api.post<SessionData>("/auth/accept-invite", { token, password, name: name.trim() });
       applySession(res.data);
-      router.replace(homeFor(res.data.user.role));
+      router.replace(res.data.twoFactorSetupRequired ? "/account" : homeFor(res.data.user.role));
     } catch (err) {
       setError(errMsg(err));
       setBusy(false);

@@ -209,6 +209,11 @@ const userSchema = new Schema(
     invitedAt: { type: Date, default: null },
     resetTokenHash: { type: String, select: false, default: null },
     resetExpires: { type: Date, default: null },
+    totpSecretEnc: { type: String, select: false, default: null },
+    pendingTotpSecretEnc: { type: String, select: false, default: null },
+    recoveryCodeHashes: { type: [String], select: false, default: [] },
+    failedLoginAttempts: { type: Number, default: 0, min: 0 },
+    loginLockedUntil: { type: Date, default: null },
     lastLoginAt: { type: Date, default: null },
   },
   ts
@@ -232,6 +237,18 @@ const refreshTokenSchema = new Schema(
 );
 refreshTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 export const RefreshToken = model("RefreshToken", refreshTokenSchema);
+
+/* ───────────────────────── Login challenge ───────────────────────── */
+const loginChallengeSchema = new Schema(
+  {
+    userId: { type: ObjectId, ref: "User", required: true, index: true },
+    tokenHash: { type: String, required: true, unique: true },
+    expiresAt: { type: Date, required: true },
+  },
+  ts
+);
+loginChallengeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+export const LoginChallenge = model("LoginChallenge", loginChallengeSchema);
 
 /* ───────────────────────── Employee (+ card) ───────────────────────── */
 const employeeSchema = new Schema(
@@ -475,13 +492,26 @@ const platformSettingSchema = new Schema(
     defaultTrialDays: { type: Number, default: 14, min: 1, max: 365 },
     poweredByText: { type: String, default: "Powered by Beno Digital Card" },
     expiryReminderDays: { type: Number, default: 7, min: 1, max: 60 },
+    require2faForSuperAdmin: { type: Boolean, default: false },
+    enquiryRetentionDays: { type: Number, default: 730, min: 1, max: 3650 },
+    leadRetentionDays: { type: Number, default: 730, min: 1, max: 3650 },
   },
   ts
 );
 export const PlatformSetting = model("PlatformSetting", platformSettingSchema);
 
 export async function getPlatformSettings() {
-  return PlatformSetting.findOneAndUpdate({ key: "platform" }, { $setOnInsert: { key: "platform" } }, { upsert: true, returnDocument: "after" }).lean();
+  const settings = await PlatformSetting.findOneAndUpdate(
+    { key: "platform" },
+    { $setOnInsert: { key: "platform" } },
+    { upsert: true, returnDocument: "after" }
+  ).lean();
+  return {
+    ...settings,
+    require2faForSuperAdmin: settings.require2faForSuperAdmin ?? false,
+    enquiryRetentionDays: settings.enquiryRetentionDays ?? 730,
+    leadRetentionDays: settings.leadRetentionDays ?? 730,
+  };
 }
 
 /* ───────────────────────────────── Job lock ───────────────────────────── */

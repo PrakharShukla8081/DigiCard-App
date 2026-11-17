@@ -8,7 +8,7 @@ import { runJobs } from "../jobs/runner.js";
 import { logger } from "../common/logger.js";
 
 const router = express.Router();
-const jobsBody = z.object({ jobs: z.array(z.enum(["reminders", "subscriptions"])).default(["reminders", "subscriptions"]) }).default({});
+const jobsBody = z.object({ jobs: z.array(z.enum(["reminders", "subscriptions", "retention"])).default(["reminders", "subscriptions"]) }).default({});
 
 router.post(
   "/run",

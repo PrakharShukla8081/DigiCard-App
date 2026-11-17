@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
-import { User, Organization } from "../models/index.js";
+import { User, Organization, getPlatformSettings } from "../models/index.js";
 import { unauthorized, forbidden } from "../common/errors.js";
 import { ROLES } from "../common/constants.js";
 import { getEntitlements, assertActive, assertFeature } from "../services/entitlements.js";
@@ -35,6 +35,15 @@ export async function authenticate(req, _res, next) {
   const user = await User.findById(payload.sub).select("name email role organizationId employeeId status tokenVersion").lean();
   if (!user || user.status !== "active" || (user.tokenVersion || 0) !== payload.tv) {
     return next(unauthorized("Your session is no longer valid. Please log in again."));
+  }
+  if (user.role === ROLES.SUPER_ADMIN && req.originalUrl.startsWith("/api/platform")) {
+    const settings = await getPlatformSettings();
+    if (settings.require2faForSuperAdmin) {
+      const hasTwoFactor = await User.exists({ _id: user._id, totpSecretEnc: { $ne: null } });
+      if (!hasTwoFactor) {
+        return next(forbidden("Two-factor authentication is required. Set it up in your account to continue.", "TWO_FACTOR_REQUIRED"));
+      }
+    }
   }
   req.auth = {
     userId: user._id,

@@ -70,6 +70,17 @@ Start the API:
 npm run dev          # http://localhost:5000  (health check: /health)
 ```
 
+### Break-glass 2FA reset
+
+Run this only from a trusted machine with access to the intended MongoDB database. It disables 2FA, clears recovery codes and account lockout, and invalidates existing access tokens for the specified user:
+
+```bash
+cd backend
+npm run auth:reset-2fa -- user@example.com
+```
+
+**Run from a trusted machine only**, and verify `MONGO_URI` points to the intended database before use.
+
 ### Terminal 2 — web app
 
 ```bash

@@ -12,6 +12,7 @@
     "dev": "node --watch src/server.js",
     "seed": "node src/scripts/seed.js",
     "plans:sync": "node src/scripts/sync-builtin-plans.js",
+    "auth:reset-2fa": "node src/scripts/reset-2fa.js",
     "test": "node --test --test-concurrency=1 tests/*.test.js",
     "migrate:cloudinary": "node src/scripts/migrate-to-cloudinary.js"
   },
@@ -29,6 +30,7 @@
     "mongoose": "^9.11.4",
     "morgan": "^1.12.1",
     "multer": "^2.5.0",
+    "otplib": "13.0.0",
     "qrcode": "^1.5.4",
     "zod": "^4.6.7"
   }

@@ -5,7 +5,7 @@
  *
  * The runner's database lock makes these timers safe across multiple instances.
  */
-import { Organization, Subscription, User } from "../models/index.js";
+import { Enquiry, Lead, Organization, Subscription, User } from "../models/index.js";
 import { getPlatformSettings } from "../models/index.js";
 import { ROLES } from "../common/constants.js";
 import { localParts } from "../services/time.js";
@@ -59,8 +59,23 @@ export async function runSubscriptionJobs(now = new Date()) {
   return { expired: expired.modifiedCount, warned: soon.length };
 }
 
+export async function runRetentionJobs(now = new Date()) {
+  const settings = await getPlatformSettings();
+  const enquiryCutoff = new Date(now.getTime() - settings.enquiryRetentionDays * 864e5);
+  const leadCutoff = new Date(now.getTime() - settings.leadRetentionDays * 864e5);
+  const organizationIds = await Organization.distinct("_id");
+  const [enquiries, leads] = await Promise.all([
+    organizationIds.length
+      ? Enquiry.deleteMany({ organizationId: { $in: organizationIds }, createdAt: { $lt: enquiryCutoff } }).setOptions({ skipTenantGuard: true })
+      : Promise.resolve({ deletedCount: 0 }),
+    Lead.deleteMany({ createdAt: { $lt: leadCutoff } }),
+  ]);
+  return { enquiries: enquiries.deletedCount, leads: leads.deletedCount };
+}
+
 export function startScheduler() {
   setInterval(() => runJobs(["reminders"], { trigger: "timer" }).catch((e) => logger.error("reminder job failed", e)), 10 * 60_000).unref();
   setInterval(() => runJobs(["subscriptions"], { trigger: "timer" }).catch((e) => logger.error("subscription job failed", e)), 60 * 60_000).unref();
-  logger.info("Background jobs started (reminders every 10 min, subscriptions hourly)");
+  setInterval(() => runJobs(["retention"], { trigger: "timer" }).catch((e) => logger.error("retention job failed", e)), 24 * 60 * 60_000).unref();
+  logger.info("Background jobs started (reminders every 10 min, subscriptions hourly, retention daily)");
 }

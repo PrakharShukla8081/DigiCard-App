@@ -1,14 +1,17 @@
+import crypto from "node:crypto";
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import QRCode from "qrcode";
+import { generateSecret, generateURI, verify } from "otplib";
 import { z } from "zod";
 import { env } from "../../config/env.js";
-import { User, RefreshToken, Organization, Employee } from "../../models/index.js";
+import { LoginChallenge, User, RefreshToken, Organization, Employee, getPlatformSettings } from "../../models/index.js";
 import { parse, emailSchema, passwordSchema } from "../../common/validate.js";
-import { randomToken, sha256 } from "../../common/crypto.js";
-import { unauthorized, forbidden, badRequest } from "../../common/errors.js";
+import { canEncrypt, decrypt, encrypt, randomToken, sha256 } from "../../common/crypto.js";
+import { AppError, unauthorized, forbidden, badRequest, conflict } from "../../common/errors.js";
 import { rateLimit } from "../../common/rateLimit.js";
 import { ROLES } from "../../common/constants.js";
-import { authenticate, signAccessToken } from "../../middleware/auth.js";
+import { authenticate, requireRole, signAccessToken } from "../../middleware/auth.js";
 import { getEntitlements } from "../../services/entitlements.js";
 import { sendEmail, templates } from "../../services/email.js";
 import { audit } from "../../services/audit.js";
@@ -17,6 +20,10 @@ const router = Router();
 
 export const REFRESH_COOKIE = "bdc_rt";
 export const SESSION_COOKIE = "bdc_session";
+const INVALID_LOGIN = "Incorrect email or password.";
+const MAX_LOGIN_FAILURES = 5;
+const LOGIN_LOCK_MS = 15 * 60_000;
+const CHALLENGE_TTL_MS = 5 * 60_000;
 
 const cookieBase = () => ({
   httpOnly: true,
@@ -44,6 +51,81 @@ async function issueSession(req, res, user) {
 function clearSession(res) {
   res.clearCookie(REFRESH_COOKIE, { ...cookieBase(), path: "/api/auth" });
   res.clearCookie(SESSION_COOKIE, { ...cookieBase(), httpOnly: false, path: "/" });
+}
+
+function normalizeRecoveryCode(code) {
+  return String(code).replace(/[^a-z0-9]/gi, "").toUpperCase();
+}
+
+function isLoginLocked(user, now = new Date()) {
+  return Boolean(user.loginLockedUntil && user.loginLockedUntil > now);
+}
+
+async function clearExpiredLoginLock(user, now = new Date()) {
+  if (!user.loginLockedUntil || user.loginLockedUntil > now) return;
+  await User.updateOne(
+    { _id: user._id, loginLockedUntil: { $lte: now } },
+    { $set: { loginLockedUntil: null, failedLoginAttempts: 0 } }
+  );
+  user.loginLockedUntil = null;
+  user.failedLoginAttempts = 0;
+}
+
+async function recordFailedLogin(req, user) {
+  const now = new Date();
+  const updated = await User.findOneAndUpdate(
+    { _id: user._id, $or: [{ loginLockedUntil: null }, { loginLockedUntil: { $lte: now } }] },
+    { $inc: { failedLoginAttempts: 1 } },
+    { returnDocument: "after" }
+  ).select("failedLoginAttempts").lean();
+  if (!updated || updated.failedLoginAttempts < MAX_LOGIN_FAILURES) return;
+
+  const lockedUntil = new Date(now.getTime() + LOGIN_LOCK_MS);
+  const locked = await User.findOneAndUpdate(
+    {
+      _id: user._id,
+      failedLoginAttempts: { $gte: MAX_LOGIN_FAILURES },
+      $or: [{ loginLockedUntil: null }, { loginLockedUntil: { $lte: now } }],
+    },
+    { $set: { loginLockedUntil: lockedUntil } },
+    { returnDocument: "after" }
+  ).lean();
+  if (locked) {
+    await audit(req, {
+      action: "auth.account_locked",
+      entity: "User",
+      entityId: user._id,
+      summary: "Account locked after repeated failed sign-in attempts.",
+      organizationId: user.organizationId,
+    });
+  }
+}
+
+async function verifySecondFactor(user, code) {
+  const normalized = String(code).trim();
+  if (/^\d{6}$/.test(normalized) && user.totpSecretEnc) {
+    const result = await verify({ secret: decrypt(user.totpSecretEnc), token: normalized, epochTolerance: 30 });
+    if (result.valid) return { type: "totp" };
+  }
+  const recoveryHash = sha256(normalizeRecoveryCode(normalized));
+  if (user.recoveryCodeHashes?.includes(recoveryHash)) return { type: "recovery", hash: recoveryHash };
+  return null;
+}
+
+async function consumeRecoveryCode(userId, hash) {
+  const result = await User.updateOne({ _id: userId, recoveryCodeHashes: hash }, { $pull: { recoveryCodeHashes: hash } });
+  return result.modifiedCount === 1;
+}
+
+async function finishLogin(req, res, user) {
+  user.lastLoginAt = new Date();
+  user.failedLoginAttempts = 0;
+  user.loginLockedUntil = null;
+  await user.save();
+  await issueSession(req, res, user);
+  req.auth = { userId: user._id, name: user.name, role: user.role, organizationId: user.organizationId };
+  await audit(req, { action: "auth.login", entity: "User", entityId: user._id, summary: `${user.email} signed in` });
+  res.json({ success: true, data: { accessToken: signAccessToken(user), ...(await sessionPayload(user)) } });
 }
 
 /** Public profile returned to the web app after login / refresh. */
@@ -101,24 +183,136 @@ const loginLimiter = rateLimit({
   key: (req) => `${req.ip}|${String(req.body?.email || "").toLowerCase()}`,
   message: "Too many login attempts. Please wait 15 minutes and try again.",
 });
+const twoFactorLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, message: "Too many verification attempts. Please wait 15 minutes and try again." });
 const emailLimiter = rateLimit({ windowMs: 60 * 60_000, max: 5, message: "Too many requests. Please try again in an hour." });
 
 /* ───── POST /api/auth/login ───── */
 router.post("/login", loginLimiter, async (req, res) => {
   const { email, password } = parse(z.object({ email: emailSchema, password: z.string().min(1).max(128) }), req.body);
-  const user = await User.findOne({ email }).select("+passwordHash");
+  const user = await User.findOne({ email }).select("+passwordHash +totpSecretEnc");
+  if (user) {
+    await clearExpiredLoginLock(user);
+    if (isLoginLocked(user)) throw unauthorized(INVALID_LOGIN, "INVALID_CREDENTIALS");
+  }
   // Same message for unknown email and wrong password, to avoid revealing which emails exist.
   if (!user || !user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
-    throw unauthorized("Incorrect email or password.", "INVALID_CREDENTIALS");
+    if (user) await recordFailedLogin(req, user);
+    throw unauthorized(INVALID_LOGIN, "INVALID_CREDENTIALS");
   }
   if (user.status === "invited") throw forbidden("Please finish setting up your account using the invite link in your email.", "INVITE_PENDING");
   await assertCanSignIn(user);
-  user.lastLoginAt = new Date();
+
+  if (user.role === ROLES.SUPER_ADMIN || user.role === ROLES.COMPANY_ADMIN) {
+    const settings = user.role === ROLES.SUPER_ADMIN ? await getPlatformSettings() : null;
+    if (settings?.require2faForSuperAdmin && !user.totpSecretEnc) {
+      throw forbidden("Two-factor authentication is required. Set it up in your account before signing in.", "TWO_FACTOR_REQUIRED");
+    }
+    if (user.totpSecretEnc) {
+      const challengeToken = randomToken(32);
+      await LoginChallenge.create({
+        userId: user._id,
+        tokenHash: sha256(challengeToken),
+        expiresAt: new Date(Date.now() + CHALLENGE_TTL_MS),
+      });
+      return res.json({ success: true, data: { challengeRequired: true, challengeToken } });
+    }
+  }
+
+  await finishLogin(req, res, user);
+});
+
+router.post("/2fa", twoFactorLimiter, async (req, res) => {
+  const { challengeToken, code } = parse(
+    z.object({ challengeToken: z.string().min(20).max(200), code: z.string().trim().min(1).max(64) }),
+    req.body
+  );
+  const now = new Date();
+  const challenge = await LoginChallenge.findOne({ tokenHash: sha256(challengeToken), expiresAt: { $gt: now } });
+  if (!challenge) throw unauthorized(INVALID_LOGIN, "INVALID_CREDENTIALS");
+  const user = await User.findById(challenge.userId).select("+totpSecretEnc +recoveryCodeHashes");
+  if (!user || user.status !== "active" || !user.totpSecretEnc) throw unauthorized(INVALID_LOGIN, "INVALID_CREDENTIALS");
+  await clearExpiredLoginLock(user, now);
+  if (isLoginLocked(user, now)) throw unauthorized(INVALID_LOGIN, "INVALID_CREDENTIALS");
+  await assertCanSignIn(user);
+
+  const factor = await verifySecondFactor(user, code);
+  if (!factor) {
+    await recordFailedLogin(req, user);
+    throw unauthorized(INVALID_LOGIN, "INVALID_CREDENTIALS");
+  }
+
+  const consumedChallenge = await LoginChallenge.findOneAndDelete({ _id: challenge._id, expiresAt: { $gt: now } });
+  if (!consumedChallenge) throw unauthorized(INVALID_LOGIN, "INVALID_CREDENTIALS");
+  if (factor.type === "recovery" && !(await consumeRecoveryCode(user._id, factor.hash))) {
+    throw unauthorized(INVALID_LOGIN, "INVALID_CREDENTIALS");
+  }
+  await finishLogin(req, res, user);
+});
+
+const adminRoles = requireRole(ROLES.SUPER_ADMIN, ROLES.COMPANY_ADMIN);
+
+router.get("/2fa/status", authenticate, adminRoles, async (req, res) => {
+  const user = await User.findById(req.auth.userId).select("+totpSecretEnc").lean();
+  const settings = user.role === ROLES.SUPER_ADMIN ? await getPlatformSettings() : null;
+  res.json({ success: true, data: { enabled: Boolean(user.totpSecretEnc), required: Boolean(settings?.require2faForSuperAdmin) } });
+});
+
+router.post("/2fa/setup", twoFactorLimiter, authenticate, adminRoles, async (req, res) => {
+  if (!canEncrypt()) throw new AppError(503, "Two-factor setup requires ENCRYPTION_KEY to be configured.", "ENCRYPTION_UNAVAILABLE");
+  const user = await User.findById(req.auth.userId).select("+totpSecretEnc");
+  if (user.totpSecretEnc) throw conflict("Two-factor authentication is already enabled.");
+  const secret = generateSecret();
+  const uri = generateURI({ issuer: "Beno Digital Card", label: user.email, secret });
+  const qrDataUrl = await QRCode.toDataURL(uri, { errorCorrectionLevel: "M", margin: 2, width: 256 });
+  user.pendingTotpSecretEnc = encrypt(secret);
   await user.save();
-  await issueSession(req, res, user);
-  req.auth = { userId: user._id, name: user.name, role: user.role, organizationId: user.organizationId };
-  audit(req, { action: "auth.login", entity: "User", entityId: user._id, summary: `${user.email} signed in` });
-  res.json({ success: true, data: { accessToken: signAccessToken(user), ...(await sessionPayload(user)) } });
+  res.json({ success: true, data: { secret, qrDataUrl } });
+});
+
+router.post("/2fa/enable", twoFactorLimiter, authenticate, adminRoles, async (req, res) => {
+  const { code } = parse(z.object({ code: z.string().trim().regex(/^\d{6}$/) }), req.body);
+  const user = await User.findById(req.auth.userId).select("+pendingTotpSecretEnc");
+  if (!user.pendingTotpSecretEnc) throw badRequest("Start two-factor setup before confirming a code.");
+  const secret = decrypt(user.pendingTotpSecretEnc);
+  const result = await verify({ secret, token: code, epochTolerance: 30 });
+  if (!result.valid) throw badRequest("The authenticator code is invalid.");
+
+  const recoveryCodes = Array.from({ length: 8 }, () => {
+    const hex = crypto.randomBytes(9).toString("hex").toUpperCase();
+    return hex.match(/.{1,6}/g).join("-");
+  });
+  user.totpSecretEnc = user.pendingTotpSecretEnc;
+  user.pendingTotpSecretEnc = null;
+  user.recoveryCodeHashes = recoveryCodes.map((value) => sha256(normalizeRecoveryCode(value)));
+  await user.save();
+  await LoginChallenge.deleteMany({ userId: user._id });
+  audit(req, { action: "auth.2fa_enabled", entity: "User", entityId: user._id });
+  res.json({ success: true, data: { enabled: true, recoveryCodes } });
+});
+
+router.post("/2fa/disable", twoFactorLimiter, authenticate, adminRoles, async (req, res) => {
+  const { password, code } = parse(
+    z.object({ password: z.string().min(1).max(128), code: z.string().trim().min(1).max(64) }),
+    req.body
+  );
+  const user = await User.findById(req.auth.userId).select("+passwordHash +totpSecretEnc +recoveryCodeHashes");
+  if (!user.totpSecretEnc) throw badRequest("Two-factor authentication is not enabled.");
+  if (!user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) throw badRequest("Current password is incorrect.");
+  if (user.role === ROLES.SUPER_ADMIN && (await getPlatformSettings()).require2faForSuperAdmin) {
+    throw forbidden("Two-factor authentication is required for Super Admin accounts.", "TWO_FACTOR_REQUIRED");
+  }
+  const factor = await verifySecondFactor(user, code);
+  if (!factor) throw badRequest("The authenticator or recovery code is invalid.");
+  if (factor.type === "recovery" && !(await consumeRecoveryCode(user._id, factor.hash))) {
+    throw badRequest("The recovery code has already been used.");
+  }
+  user.totpSecretEnc = null;
+  user.pendingTotpSecretEnc = null;
+  user.recoveryCodeHashes = [];
+  await user.save();
+  await LoginChallenge.deleteMany({ userId: user._id });
+  audit(req, { action: "auth.2fa_disabled", entity: "User", entityId: user._id });
+  res.json({ success: true, data: { enabled: false } });
 });
 
 /* ───── POST /api/auth/refresh  (rotates the refresh token) ───── */
@@ -172,6 +366,7 @@ router.post("/logout", async (req, res) => {
 router.post("/logout-all", authenticate, async (req, res) => {
   await User.updateOne({ _id: req.auth.userId }, { $inc: { tokenVersion: 1 } });
   await RefreshToken.updateMany({ userId: req.auth.userId, revokedAt: null }, { revokedAt: new Date() });
+  await LoginChallenge.deleteMany({ userId: req.auth.userId });
   clearSession(res);
   res.json({ success: true });
 });
@@ -208,7 +403,11 @@ router.post("/accept-invite", emailLimiter, async (req, res) => {
   user.inviteTokenHash = null;
   user.inviteExpires = null;
   user.lastLoginAt = new Date();
+  user.failedLoginAttempts = 0;
+  user.loginLockedUntil = null;
   await assertCanSignIn(user);
+  const twoFactorSetupRequired =
+    user.role === ROLES.SUPER_ADMIN && (await getPlatformSettings()).require2faForSuperAdmin && !user.totpSecretEnc;
   await user.save();
   if (user.role === ROLES.EMPLOYEE && user.employeeId) {
     await Employee.updateOne({ _id: user.employeeId, organizationId: user.organizationId, activatedAt: null }, { activatedAt: new Date() });
@@ -216,7 +415,14 @@ router.post("/accept-invite", emailLimiter, async (req, res) => {
   await issueSession(req, res, user);
   req.auth = { userId: user._id, name: user.name, role: user.role, organizationId: user.organizationId };
   audit(req, { action: "auth.invite_accepted", entity: "User", entityId: user._id, summary: `${user.email} accepted invite` });
-  res.json({ success: true, data: { accessToken: signAccessToken(user), ...(await sessionPayload(user)) } });
+  res.json({
+    success: true,
+    data: {
+      accessToken: signAccessToken(user),
+      ...(await sessionPayload(user)),
+      ...(twoFactorSetupRequired ? { twoFactorSetupRequired: true } : {}),
+    },
+  });
 });
 
 /* ───── Password reset ───── */
@@ -242,9 +448,12 @@ router.post("/reset-password", emailLimiter, async (req, res) => {
   user.passwordHash = await bcrypt.hash(password, 12);
   user.resetTokenHash = null;
   user.resetExpires = null;
+  user.failedLoginAttempts = 0;
+  user.loginLockedUntil = null;
   user.tokenVersion = (user.tokenVersion || 0) + 1;
   await user.save();
   await RefreshToken.updateMany({ userId: user._id, revokedAt: null }, { revokedAt: new Date() });
+  await LoginChallenge.deleteMany({ userId: user._id });
   clearSession(res);
   res.json({ success: true, message: "Password updated. Please log in with your new password." });
 });
@@ -254,9 +463,12 @@ router.post("/change-password", authenticate, async (req, res) => {
   const user = await User.findById(req.auth.userId).select("+passwordHash");
   if (!user?.passwordHash || !(await bcrypt.compare(currentPassword, user.passwordHash))) throw badRequest("Current password is incorrect.");
   user.passwordHash = await bcrypt.hash(newPassword, 12);
+  user.failedLoginAttempts = 0;
+  user.loginLockedUntil = null;
   user.tokenVersion = (user.tokenVersion || 0) + 1;
   await user.save();
   await RefreshToken.updateMany({ userId: user._id, revokedAt: null }, { revokedAt: new Date() });
+  await LoginChallenge.deleteMany({ userId: user._id });
   await issueSession(req, res, user);
   audit(req, { action: "auth.password_changed", entity: "User", entityId: user._id });
   res.json({ success: true, data: { accessToken: signAccessToken(user) } });

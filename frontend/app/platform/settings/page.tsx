@@ -8,10 +8,20 @@ import { useLoad } from "@/lib/hooks";
 import { fmtDate } from "@/lib/utils";
 import type { Invite } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/field";
+import { Checkbox, Field, Input } from "@/components/ui/field";
 import { Chip, Dialog, ErrorBox, InviteResult, PageHeader, PageLoader, Panel, PanelHeader } from "@/components/ui/misc";
 
-type Settings = { platformName: string; supportEmail: string; supportPhone: string; defaultTrialDays: number; poweredByText: string; expiryReminderDays: number };
+type Settings = {
+  platformName: string;
+  supportEmail: string;
+  supportPhone: string;
+  defaultTrialDays: number;
+  poweredByText: string;
+  expiryReminderDays: number;
+  require2faForSuperAdmin: boolean;
+  enquiryRetentionDays: number;
+  leadRetentionDays: number;
+};
 type Admin = { _id: string; name: string; email: string; status: string; lastLoginAt: string | null };
 
 export default function PlatformSettingsPage() {
@@ -36,7 +46,13 @@ export default function PlatformSettingsPage() {
   async function save() {
     setBusy(true);
     try {
-      await api.put("/platform/settings", { ...form, defaultTrialDays: Number(form!.defaultTrialDays), expiryReminderDays: Number(form!.expiryReminderDays) });
+      await api.put("/platform/settings", {
+        ...form,
+        defaultTrialDays: Number(form!.defaultTrialDays),
+        expiryReminderDays: Number(form!.expiryReminderDays),
+        enquiryRetentionDays: Number(form!.enquiryRetentionDays),
+        leadRetentionDays: Number(form!.leadRetentionDays),
+      });
       toast.success("Settings saved");
     } catch (e) {
       toast.error(errMsg(e));
@@ -102,6 +118,23 @@ export default function PlatformSettingsPage() {
                 {a.status === "active" ? <Chip tone="ok">Active</Chip> : a.status === "invited" ? <Chip tone="warn">Invited</Chip> : <Chip tone="bad">Disabled</Chip>}
               </div>
             ))}
+          </div>
+        </Panel>
+        <Panel>
+          <PanelHeader title="Security and data retention" />
+          <div className="grid gap-4 px-5 pb-5">
+            <Checkbox
+              checked={form.require2faForSuperAdmin}
+              onChange={(e) => setForm({ ...form, require2faForSuperAdmin: e.target.checked })}
+              label="Require 2FA for Super Admin sign-ins"
+            />
+            <Field label="Keep enquiries for (days)">
+              <Input type="number" min={1} max={3650} value={form.enquiryRetentionDays} onChange={(e) => setForm({ ...form, enquiryRetentionDays: Number(e.target.value) })} />
+            </Field>
+            <Field label="Keep website leads for (days)">
+              <Input type="number" min={1} max={3650} value={form.leadRetentionDays} onChange={(e) => setForm({ ...form, leadRetentionDays: Number(e.target.value) })} />
+            </Field>
+            <p className="text-xs text-muted">Enquiries include contact exchange submissions. Expired records are removed by the daily retention job.</p>
           </div>
         </Panel>
       </div>
