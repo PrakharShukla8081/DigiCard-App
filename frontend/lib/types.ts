@@ -128,4 +128,9 @@ export type Plan = {
   };
 };
 
-export type Invite = { link: string; emailSent: boolean; emailError: "not_configured" | "testing_mode" | "invalid_from" | "send_failed" | null };
+export type Invite = {
+  link: string;
+  emailSent: boolean;
+  emailQueued?: boolean;
+  emailError: "not_configured" | "testing_mode" | "invalid_from" | "send_failed" | "invalid_grant" | "gmail_auth_failed" | "gmail_send_failed" | null;
+};

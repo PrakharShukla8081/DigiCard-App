@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { UserPlus } from "lucide-react";
+import { Mail, UserPlus } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { useLoad } from "@/lib/hooks";
 import { fmtDate } from "@/lib/utils";
@@ -22,15 +22,22 @@ type Settings = {
   enquiryRetentionDays: number;
   leadRetentionDays: number;
 };
+type EmailStatus = { provider: "resend" | "gmail"; sentToday: number; dailyLimit: number; queued: number; failed: number };
+type EmailSendResult = { sent: boolean; queued?: boolean; reason?: string };
 type Admin = { _id: string; name: string; email: string; status: string; lastLoginAt: string | null };
 
 export default function PlatformSettingsPage() {
   const { data, error, loading, reload } = useLoad(async () => {
-    const [settings, admins] = await Promise.all([api.get<Settings>("/platform/settings"), api.get<Admin[]>("/platform/admins")]);
-    return { settings, admins };
+    const [settingsResponse, admins] = await Promise.all([
+      api.get<Settings & { emailStatus: EmailStatus }>("/platform/settings"),
+      api.get<Admin[]>("/platform/admins"),
+    ]);
+    const { emailStatus, ...settings } = settingsResponse;
+    return { settings, emailStatus, admins };
   });
   const [form, setForm] = useState<Settings | null>(null);
   const [busy, setBusy] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
   const [dlg, setDlg] = useState(false);
   const [na, setNa] = useState({ name: "", email: "" });
   const [invite, setInvite] = useState<Invite | null>(null);
@@ -58,6 +65,21 @@ export default function PlatformSettingsPage() {
       toast.error(errMsg(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function sendTestEmail() {
+    setEmailBusy(true);
+    try {
+      const result = await api.post<EmailSendResult>("/platform/settings/test-email", {});
+      if (result.data.sent) toast.success("Test email sent to your account.");
+      else if (result.data.queued) toast.success("Test email queued and will be sent automatically.");
+      else toast.error(result.data.reason || "The test email could not be sent.");
+      reload();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setEmailBusy(false);
     }
   }
 
@@ -135,6 +157,22 @@ export default function PlatformSettingsPage() {
               <Input type="number" min={1} max={3650} value={form.leadRetentionDays} onChange={(e) => setForm({ ...form, leadRetentionDays: Number(e.target.value) })} />
             </Field>
             <p className="text-xs text-muted">Enquiries include contact exchange submissions. Expired records are removed by the daily retention job.</p>
+          </div>
+        </Panel>
+        <Panel>
+          <PanelHeader title="Email delivery" sub="Provider and daily usage (Asia/Kolkata)." />
+          <div className="grid gap-3 px-5 pb-5">
+            <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+              <span>Provider: <b className="capitalize">{data.emailStatus.provider}</b></span>
+              <span>Sent today: <b>{data.emailStatus.sentToday} / {data.emailStatus.dailyLimit}</b></span>
+              <span>Queued: <b>{data.emailStatus.queued}</b></span>
+              <span>Failed: <b>{data.emailStatus.failed}</b></span>
+            </div>
+            <div>
+              <Button onClick={sendTestEmail} loading={emailBusy}>
+                <Mail /> Send test email
+              </Button>
+            </div>
           </div>
         </Panel>
       </div>

@@ -221,7 +221,7 @@ export default function RemindersPage() {
                   <Td className="whitespace-nowrap text-muted">{fmtDate(l.createdAt, true)}</Td>
                   <Td className="font-semibold">{l.employeeName}</Td>
                   <Td className="capitalize">{l.channel}</Td>
-                  <Td>{l.status === "sent" ? <Chip tone="ok">Sent</Chip> : l.status === "failed" ? <Chip tone="bad">Failed</Chip> : <Chip>Skipped</Chip>}</Td>
+                  <Td>{l.status === "sent" ? <Chip tone="ok">Sent</Chip> : l.status === "queued" ? <Chip tone="warn">Queued</Chip> : l.status === "failed" ? <Chip tone="bad">Failed</Chip> : <Chip>Skipped</Chip>}</Td>
                   <Td className="text-muted">{l.reason || l.to}</Td>
                 </tr>
               ))}

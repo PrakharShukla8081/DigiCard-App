@@ -32,6 +32,12 @@ export const env = {
 
   resendApiKey: process.env.RESEND_API_KEY,
   emailFrom: process.env.EMAIL_FROM || "Beno Digital Card <no-reply@example.com>",
+  emailProvider: (process.env.EMAIL_PROVIDER || "resend").trim().toLowerCase(),
+  emailDailyLimit: Number(process.env.EMAIL_DAILY_LIMIT || 450),
+  gmailClientId: process.env.GMAIL_CLIENT_ID,
+  gmailClientSecret: process.env.GMAIL_CLIENT_SECRET,
+  gmailRefreshToken: process.env.GMAIL_REFRESH_TOKEN,
+  gmailSender: process.env.GMAIL_SENDER?.trim(),
 
   whatsapp: {
     accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
@@ -57,6 +63,22 @@ export function assertEnv() {
   }
   if (env.jwtAccessSecret.length < 32) {
     throw new Error("JWT_ACCESS_SECRET must be at least 32 characters long.");
+  }
+  if (!["resend", "gmail"].includes(env.emailProvider)) {
+    throw new Error("EMAIL_PROVIDER must be either \"resend\" or \"gmail\".");
+  }
+  if (!Number.isInteger(env.emailDailyLimit) || env.emailDailyLimit < 1) {
+    throw new Error("EMAIL_DAILY_LIMIT must be a positive whole number.");
+  }
+  if (env.emailProvider === "gmail") {
+    const missingEmailSettings = [];
+    if (!env.gmailClientId) missingEmailSettings.push("GMAIL_CLIENT_ID");
+    if (!env.gmailClientSecret) missingEmailSettings.push("GMAIL_CLIENT_SECRET");
+    if (!env.gmailRefreshToken) missingEmailSettings.push("GMAIL_REFRESH_TOKEN");
+    if (!env.gmailSender) missingEmailSettings.push("GMAIL_SENDER");
+    if (missingEmailSettings.length) {
+      throw new Error(`EMAIL_PROVIDER=gmail requires: ${missingEmailSettings.join(", ")}.`);
+    }
   }
   if (env.cronSecret && env.cronSecret.length < 32) {
     throw new Error("CRON_SECRET must be at least 32 characters long when configured.");

@@ -436,7 +436,7 @@ router.post("/forgot-password", emailLimiter, async (req, res) => {
     await user.save();
     const link = `${env.frontendUrl}/reset-password?token=${encodeURIComponent(raw)}`;
     const t = templates.reset({ name: user.name, link });
-    await sendEmail({ to: user.email, ...t });
+    await sendEmail({ to: user.email, ...t, kind: "password_reset", organizationId: user.organizationId });
   }
   res.json({ success: true, message: "If an account exists for this email, a reset link has been sent." });
 });

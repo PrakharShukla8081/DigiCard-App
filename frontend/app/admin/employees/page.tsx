@@ -83,9 +83,16 @@ export default function EmployeesPage() {
     if (action === "invite" && !(await confirm({ title: `Send login invites to ${n} employee${n === 1 ? "" : "s"}?`, body: "Employees with a work email get an email to set their password. Employees who already have an active login are skipped.", confirmLabel: "Send invites" }))) return;
     setBusy(true);
     try {
-      const r = await api.post<{ affected: number; skipped?: number; reasons?: string[] }>("/org/employees/bulk", { ids: [...sel], action });
+      const r = await api.post<{ affected: number; skipped?: number; reasons?: string[]; sentNow?: number; queued?: number; emailFailed?: number }>("/org/employees/bulk", { ids: [...sel], action });
       const extra = r.data.skipped ? ` · ${r.data.skipped} skipped` : "";
-      toast.success(`${r.data.affected} updated${extra}`, r.data.reasons?.length ? { description: r.data.reasons.slice(0, 3).join("\n") } : undefined);
+      if (action === "invite") {
+        const delivery = `${r.data.sentNow || 0} sent now, ${r.data.queued || 0} queued and will go out automatically over the next days`;
+        const failures = r.data.emailFailed ? `${r.data.emailFailed} email${r.data.emailFailed === 1 ? "" : "s"} failed` : "";
+        const details = [delivery, failures, ...(r.data.reasons || []).slice(0, 3)].filter(Boolean).join("\n");
+        toast.success(`${r.data.affected} invites created${extra}`, { description: details });
+      } else {
+        toast.success(`${r.data.affected} updated${extra}`, r.data.reasons?.length ? { description: r.data.reasons.slice(0, 3).join("\n") } : undefined);
+      }
       setSel(new Set());
       reload();
     } catch (e) {

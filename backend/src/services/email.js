@@ -1,7 +1,11 @@
+import crypto from "node:crypto";
 import { env } from "../config/env.js";
 import { logger } from "../common/logger.js";
+import { EmailOutbox, PlatformSetting } from "../models/index.js";
+import { dayKey } from "./time.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const MAX_ATTEMPTS = 5;
 
 function classifyEmailError(reason) {
   const text = String(reason || "").toLowerCase();
@@ -10,35 +14,270 @@ function classifyEmailError(reason) {
   return "send_failed";
 }
 
-/**
- * Send an email through Resend's HTTP API.
- * Without RESEND_API_KEY the email is printed to the server console (development mode)
- * and `{ sent: false, reason: "not_configured" }` is returned — nothing is faked.
- */
-export async function sendEmail({ to, subject, html, text }) {
+function istDayBounds(now) {
+  const start = new Date(`${dayKey(now, "Asia/Kolkata")}T00:00:00+05:30`);
+  return { start, end: new Date(start.getTime() + 864e5) };
+}
+
+function nextIstDayStart(now) {
+  return istDayBounds(new Date(istDayBounds(now).end.getTime())).start;
+}
+
+function retryDelay(attempt) {
+  return Math.min(24 * 60 * 60_000, 60_000 * 2 ** Math.max(0, attempt - 1));
+}
+
+function retryableStatus(status) {
+  return status === 429 || status >= 500;
+}
+
+function encodedHeader(value) {
+  const chunks = [];
+  let chunk = "";
+  for (const character of String(value ?? "")) {
+    if (chunk && Buffer.byteLength(chunk + character, "utf8") > 45) {
+      chunks.push(chunk);
+      chunk = "";
+    }
+    chunk += character;
+  }
+  if (chunk || !chunks.length) chunks.push(chunk);
+  return chunks.map((part) => `=?UTF-8?B?${Buffer.from(part, "utf8").toString("base64")}?=`).join("\r\n ");
+}
+
+function base64MimeBody(value) {
+  const encoded = Buffer.from(String(value ?? ""), "utf8").toString("base64");
+  return encoded.match(/.{1,76}/g)?.join("\r\n") || "";
+}
+
+const safeHeader = (value) => String(value ?? "").replace(/[\r\n]+/g, " ").trim();
+
+export function buildGmailRaw({ to, subject, html, text, sender, replyTo }) {
+  const boundary = `beno-${crypto.randomUUID()}`;
+  const headers = [
+    `From: ${encodedHeader("Beno Card")} <${safeHeader(sender)}>`,
+    `To: ${safeHeader(to)}`,
+    `Subject: ${encodedHeader(subject)}`,
+    ...(replyTo ? [`Reply-To: ${safeHeader(replyTo)}`] : []),
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+  ];
+  const mime = [
+    ...headers,
+    "",
+    `--${boundary}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    base64MimeBody(text),
+    `--${boundary}`,
+    "Content-Type: text/html; charset=UTF-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    base64MimeBody(html),
+    `--${boundary}--`,
+    "",
+  ].join("\r\n");
+  return Buffer.from(mime, "utf8").toString("base64url");
+}
+
+let gmailTokenCache = { credentials: "", accessToken: "", expiresAt: 0 };
+
+async function gmailAccessToken() {
+  const credentials = `${env.gmailClientId}\0${env.gmailClientSecret}\0${env.gmailRefreshToken}`;
+  if (gmailTokenCache.credentials === credentials && gmailTokenCache.expiresAt > Date.now()) return { accessToken: gmailTokenCache.accessToken };
+
+  let response;
+  try {
+    response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        client_id: env.gmailClientId,
+        client_secret: env.gmailClientSecret,
+        refresh_token: env.gmailRefreshToken,
+      }),
+    });
+  } catch (e) {
+    return { error: { sent: false, reason: "Unable to reach Google OAuth.", code: "send_failed", retryable: true } };
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.access_token) {
+    const invalidGrant = data.error === "invalid_grant";
+    return {
+      error: {
+        sent: false,
+        reason: invalidGrant
+          ? "Gmail authorisation expired, generate a new refresh token"
+          : `Gmail token request failed: ${data.error_description || data.error || `HTTP ${response.status}`}`,
+        code: invalidGrant ? "invalid_grant" : "gmail_auth_failed",
+        retryable: retryableStatus(response.status),
+      },
+    };
+  }
+  gmailTokenCache = {
+    credentials,
+    accessToken: data.access_token,
+    expiresAt: Date.now() + Math.max(0, Number(data.expires_in || 3600) - 60) * 1000,
+  };
+  return { accessToken: data.access_token };
+}
+
+async function sendWithResend(message) {
   if (!env.resendApiKey) {
-    if (!env.isTest) logger.info(`[email:not-sent] to=${to} subject="${subject}"\n${text || ""}`);
-    return { sent: false, reason: "not_configured", code: "not_configured" };
+    if (!env.isTest) logger.info(`[email:not-sent] to=${message.to} subject="${message.subject}"\n${message.text || ""}`);
+    return { sent: false, reason: "not_configured", code: "not_configured", retryable: false };
   }
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${env.resendApiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: env.emailFrom, to: [to], subject, html, text }),
+      body: JSON.stringify({ from: env.emailFrom, to: [message.to], subject: message.subject, html: message.html, text: message.text }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const reason = data?.message || `HTTP ${res.status}`;
       const code = classifyEmailError(reason);
       logger.warn(`[email:send-failed] code=${code} reason=${reason}`);
-      return { sent: false, reason, code };
+      return { sent: false, reason, code, retryable: retryableStatus(res.status) };
     }
     return { sent: true, id: data.id };
   } catch (e) {
-    const reason = e.message;
-    logger.warn(`[email:send-failed] code=send_failed reason=${reason}`);
-    return { sent: false, reason, code: "send_failed" };
+    logger.warn(`[email:send-failed] code=send_failed reason=${e.message}`);
+    return { sent: false, reason: e.message, code: "send_failed", retryable: true };
   }
+}
+
+async function sendWithGmail(message) {
+  const tokenResult = await gmailAccessToken();
+  if (tokenResult.error) return tokenResult.error;
+  const settings = await PlatformSetting.findOne({ key: "platform" }).select("supportEmail").lean();
+  const raw = buildGmailRaw({
+    ...message,
+    sender: env.gmailSender,
+    replyTo: settings?.supportEmail,
+  });
+  try {
+    const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${tokenResult.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ raw }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const errorValue = typeof data.error === "string" ? data.error : data.error?.message || data.error?.status;
+      const reason = data.error?.message || data.error_description || errorValue || `HTTP ${response.status}`;
+      return {
+        sent: false,
+        reason: `Gmail send failed: ${reason}`,
+        code: "gmail_send_failed",
+        retryable: retryableStatus(response.status),
+      };
+    }
+    return { sent: true, id: data.id };
+  } catch {
+    return { sent: false, reason: "Unable to reach Gmail API.", code: "send_failed", retryable: true };
+  }
+}
+
+async function deliverEmail(message) {
+  return env.emailProvider === "gmail" ? sendWithGmail(message) : sendWithResend(message);
+}
+
+export async function getEmailMetrics(now = new Date()) {
+  const { start, end } = istDayBounds(now);
+  const [sentToday, queued, failed] = await Promise.all([
+    EmailOutbox.countDocuments({ status: "sent", sentAt: { $gte: start, $lt: end } }),
+    EmailOutbox.countDocuments({ status: "queued" }),
+    EmailOutbox.countDocuments({ status: "failed" }),
+  ]);
+  return { provider: env.emailProvider, sentToday, dailyLimit: env.emailDailyLimit, queued, failed };
+}
+
+async function saveMessage(message, status, { attempts = 0, lastError = "", sendAfter = new Date(), sentAt = null } = {}) {
+  return EmailOutbox.create({
+    ...message,
+    status,
+    attempts,
+    lastError: String(lastError).slice(0, 1000),
+    sendAfter,
+    sentAt,
+  });
+}
+
+/**
+ * Dispatch immediately within the India daily cap; otherwise persist the email
+ * in the outbox for the scheduled worker.
+ */
+export async function sendEmail({ to, subject, html, text, kind = "general", organizationId = null }) {
+  const message = { to, subject, html, text, kind, organizationId };
+  const metrics = await getEmailMetrics();
+  if (metrics.sentToday >= metrics.dailyLimit) {
+    const outbox = await saveMessage(message, "queued", { sendAfter: nextIstDayStart(new Date()) });
+    return { sent: false, queued: true, reason: "Daily email limit reached.", code: "queued", outboxId: String(outbox._id) };
+  }
+
+  const result = await deliverEmail(message);
+  if (result.sent) {
+    const outbox = await saveMessage(message, "sent", { attempts: 1, sentAt: new Date() });
+    return { sent: true, queued: false, id: result.id, outboxId: String(outbox._id) };
+  }
+
+  if (result.retryable) {
+    const outbox = await saveMessage(message, "queued", {
+      attempts: 1,
+      lastError: result.reason,
+      sendAfter: new Date(Date.now() + retryDelay(1)),
+    });
+    return { sent: false, queued: true, reason: result.reason, code: result.code, outboxId: String(outbox._id) };
+  }
+
+  const outbox = await saveMessage(message, "failed", { attempts: 1, lastError: result.reason });
+  return { sent: false, queued: false, reason: result.reason, code: result.code, outboxId: String(outbox._id) };
+}
+
+export async function runQueuedEmails(now = new Date()) {
+  const { start, end } = istDayBounds(now);
+  let sentToday = await EmailOutbox.countDocuments({ status: "sent", sentAt: { $gte: start, $lt: end } });
+  let sent = 0;
+  let retried = 0;
+  let failed = 0;
+
+  while (sentToday < env.emailDailyLimit) {
+    const email = await EmailOutbox.findOneAndUpdate(
+      { status: "queued", sendAfter: { $lte: now } },
+      { $set: { sendAfter: new Date(now.getTime() + 60_000) } },
+      { sort: { createdAt: 1, _id: 1 }, returnDocument: "after" }
+    ).lean();
+    if (!email) break;
+
+    const attempts = email.attempts + 1;
+    const result = await deliverEmail(email);
+    if (result.sent) {
+      await EmailOutbox.updateOne(
+        { _id: email._id, status: "queued" },
+        { $set: { status: "sent", attempts, lastError: "", sentAt: now } }
+      );
+      sentToday += 1;
+      sent += 1;
+    } else if (result.retryable && attempts < MAX_ATTEMPTS) {
+      await EmailOutbox.updateOne(
+        { _id: email._id, status: "queued" },
+        { $set: { attempts, lastError: result.reason, sendAfter: new Date(now.getTime() + retryDelay(attempts)) } }
+      );
+      retried += 1;
+    } else {
+      await EmailOutbox.updateOne(
+        { _id: email._id, status: "queued" },
+        { $set: { status: "failed", attempts, lastError: result.reason } }
+      );
+      failed += 1;
+    }
+  }
+
+  const queued = await EmailOutbox.countDocuments({ status: "queued" });
+  return { sent, retried, failed, queued, sentToday };
 }
 
 function layout(title, bodyHtml, cta) {

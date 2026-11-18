@@ -104,7 +104,7 @@ router.post("/demo-requests", leadLimiter, async (req, res) => {
   const recipients = new Set(admins.map((admin) => admin.email).filter(Boolean));
   if (settings?.supportEmail) recipients.add(settings.supportEmail);
   const email = templates.leadRequest({ lead, adminLink: `${env.frontendUrl}/platform/leads` });
-  for (const to of recipients) sendEmail({ to, ...email }).catch(() => {});
+  for (const to of recipients) sendEmail({ to, ...email, kind: "website_lead" }).catch(() => {});
   res.status(201).json({ success: true, message: "Thank you! Our team will contact you within one working day." });
 });
 

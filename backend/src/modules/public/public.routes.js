@@ -172,7 +172,7 @@ router.post("/enquiries", enquiryLimiter, async (req, res) => {
   const t = b.kind === "exchange"
     ? templates.contactExchange({ employeeName: fullName(employee), orgName: org.name, enquiry, adminLink: `${env.frontendUrl}/admin/enquiries` })
     : templates.enquiry({ employeeName: fullName(employee), orgName: org.name, enquiry, adminLink: `${env.frontendUrl}/admin/enquiries` });
-  for (const to of recipients) sendEmail({ to, ...t }).catch(() => {});
+  for (const to of recipients) sendEmail({ to, ...t, kind: b.kind === "exchange" ? "contact_exchange" : "enquiry", organizationId: org._id }).catch(() => {});
 
   res.status(201).json({ success: true, message: b.kind === "exchange" ? `Sent! ${employee.firstName} will get your details.` : "Thank you! Your enquiry has been sent." });
 });

@@ -17,6 +17,11 @@ export async function issueInvite(userDoc, orgName, { send = true } = {}) {
   const link = `${env.frontendUrl}/accept-invite?token=${encodeURIComponent(raw)}`;
   if (!send) return { link, emailSent: false, emailError: null };
   const t = templates.invite({ name: userDoc.name, orgName: orgName || "Beno Digital Card", role: userDoc.role, link });
-  const mail = await sendEmail({ to: userDoc.email, ...t });
-  return { link, emailSent: mail.sent, emailError: mail.sent ? null : mail.code };
+  const mail = await sendEmail({ to: userDoc.email, ...t, kind: "invite", organizationId: userDoc.organizationId });
+  return {
+    link,
+    emailSent: mail.sent,
+    emailQueued: Boolean(mail.queued),
+    emailError: mail.sent || mail.queued ? null : mail.code,
+  };
 }

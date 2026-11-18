@@ -10,7 +10,7 @@ import { getPlatformSettings } from "../models/index.js";
 import { ROLES } from "../common/constants.js";
 import { localParts } from "../services/time.js";
 import { runReminders } from "../services/reminders.js";
-import { sendEmail, templates } from "../services/email.js";
+import { runQueuedEmails, sendEmail, templates } from "../services/email.js";
 import { logger } from "../common/logger.js";
 import { runJobs } from "./runner.js";
 
@@ -53,7 +53,12 @@ export async function runSubscriptionJobs(now = new Date()) {
     const org = await Organization.findById(s.organizationId).select("name").lean();
     const admins = await User.find({ organizationId: s.organizationId, role: ROLES.COMPANY_ADMIN, status: "active" }).select("email").lean();
     const days = Math.max(1, Math.ceil((new Date(s.endDate) - now) / 864e5));
-    for (const a of admins) await sendEmail({ to: a.email, ...templates.expiry({ orgName: org?.name || "", endDate: s.endDate, days }) });
+    for (const a of admins) await sendEmail({
+      to: a.email,
+      ...templates.expiry({ orgName: org?.name || "", endDate: s.endDate, days }),
+      kind: "expiry",
+      organizationId: s.organizationId,
+    });
     await Subscription.updateOne({ _id: s._id, organizationId: s.organizationId }, { expiryNotifiedAt: now });
   }
   return { expired: expired.modifiedCount, warned: soon.length };
@@ -73,9 +78,13 @@ export async function runRetentionJobs(now = new Date()) {
   return { enquiries: enquiries.deletedCount, leads: leads.deletedCount };
 }
 
+export async function runEmailJobs(now = new Date()) {
+  return runQueuedEmails(now);
+}
+
 export function startScheduler() {
-  setInterval(() => runJobs(["reminders"], { trigger: "timer" }).catch((e) => logger.error("reminder job failed", e)), 10 * 60_000).unref();
+  setInterval(() => runJobs(["reminders", "emails"], { trigger: "timer" }).catch((e) => logger.error("reminder/email jobs failed", e)), 10 * 60_000).unref();
   setInterval(() => runJobs(["subscriptions"], { trigger: "timer" }).catch((e) => logger.error("subscription job failed", e)), 60 * 60_000).unref();
   setInterval(() => runJobs(["retention"], { trigger: "timer" }).catch((e) => logger.error("retention job failed", e)), 24 * 60 * 60_000).unref();
-  logger.info("Background jobs started (reminders every 10 min, subscriptions hourly, retention daily)");
+  logger.info("Background jobs started (reminders/emails every 10 min, subscriptions hourly, retention daily)");
 }

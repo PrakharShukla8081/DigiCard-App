@@ -227,17 +227,22 @@ export function CopyField({ value, label = "Copy", mono = true, className }: { v
 }
 
 /** Shown after inviting someone: whether the email went out, plus the link to share manually. */
-export function InviteResult({ invite, email }: { invite: { link: string; emailSent: boolean; emailError: string | null }; email: string }) {
+export function InviteResult({ invite, email }: { invite: { link: string; emailSent: boolean; emailQueued?: boolean; emailError: string | null }; email: string }) {
   const emailMessage = {
     not_configured: `Email sending is not set up yet. Copy the link below and send it to ${email} yourself.`,
     testing_mode: `Email is in testing mode, so it was not sent to ${email}. Copy the link below and share it on WhatsApp or email.`,
     invalid_from: `The sender email domain is not verified yet. Copy the link below and share it with ${email}.`,
     send_failed: `The email could not be sent right now. Copy the link below and share it with ${email}.`,
+    invalid_grant: "Gmail authorisation expired, generate a new refresh token.",
+    gmail_auth_failed: "Gmail authorisation failed. Check the OAuth configuration and try again.",
+    gmail_send_failed: "Gmail could not send the email. Check the provider response and try again.",
   }[invite.emailError || "send_failed"];
   return (
     <div className="flex flex-col gap-2">
       {invite.emailSent ? (
         <p className="text-sm text-ok">Invite email sent to {email}.</p>
+      ) : invite.emailQueued ? (
+        <p className="text-sm text-warn">Invite queued and will be sent automatically to {email} when the daily email limit resets.</p>
       ) : (
         <p className="text-sm text-warn">{emailMessage} The link works for 7 days.</p>
       )}

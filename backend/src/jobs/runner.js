@@ -1,12 +1,13 @@
 import crypto from "node:crypto";
 import { JobLock } from "../models/index.js";
 import { logger } from "../common/logger.js";
-import { runDueReminders, runRetentionJobs, runSubscriptionJobs } from "./scheduler.js";
+import { runDueReminders, runEmailJobs, runRetentionJobs, runSubscriptionJobs } from "./scheduler.js";
 
 const JOBS = {
   reminders: runDueReminders,
   subscriptions: runSubscriptionJobs,
   retention: runRetentionJobs,
+  emails: runEmailJobs,
 };
 const LOCK_MS = 10 * 60_000;
 
@@ -29,7 +30,7 @@ async function acquire(name, owner, now) {
   }
 }
 
-export async function runJobs(names = ["reminders", "subscriptions"], { trigger = "unknown" } = {}) {
+export async function runJobs(names = ["reminders", "subscriptions", "emails"], { trigger = "unknown" } = {}) {
   const results = {};
   for (const name of names) {
     if (!JOBS[name]) {

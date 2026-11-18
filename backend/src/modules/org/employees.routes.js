@@ -297,11 +297,14 @@ router.post("/bulk", async (req, res) => {
     case "invite": {
       assertFeature(ent, "employeeLogin", "Employee login");
       const emps = await Employee.find(f).limit(5000);
-      const result = { invited: 0, skipped: 0, reasons: [] };
+      const result = { invited: 0, sentNow: 0, queued: 0, emailFailed: 0, skipped: 0, reasons: [] };
       for (const e of emps) {
         try {
-          await inviteEmployee(org, e);
+          const invite = await inviteEmployee(org, e);
           result.invited++;
+          if (invite.emailSent) result.sentNow++;
+          else if (invite.emailQueued) result.queued++;
+          else result.emailFailed++;
         } catch (err) {
           result.skipped++;
           if (result.reasons.length < 50) result.reasons.push(`${fullName(e)}: ${err.message}`);

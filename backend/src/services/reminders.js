@@ -71,7 +71,7 @@ export async function runReminders(orgId, { trigger = "schedule" } = {}) {
   if (!query) return { skipped: "no criteria selected" };
   const waCfg = useWa ? await whatsappConfig(org._id) : null;
   const runId = crypto.randomBytes(6).toString("hex");
-  const summary = { runId, trigger, matched: 0, email: { sent: 0, failed: 0, skipped: 0 }, whatsapp: { sent: 0, failed: 0, skipped: 0 } };
+  const summary = { runId, trigger, matched: 0, email: { sent: 0, queued: 0, failed: 0, skipped: 0 }, whatsapp: { sent: 0, failed: 0, skipped: 0 } };
   const logs = [];
 
   const cursor = Employee.find(query).limit(20000).cursor();
@@ -106,10 +106,10 @@ export async function runReminders(orgId, { trigger = "schedule" } = {}) {
         logs.push({ organizationId: org._id, employeeId: e._id, channel: "email", status: "skipped", reason: "No work email", runId });
       } else {
         const t = templates.reminder({ name: e.firstName, orgName: org.name, cardUrl: url, reasons, loginUrl });
-        const m = await sendEmail({ to: e.workEmail, ...t });
-        const st = m.sent ? "sent" : m.reason === "not_configured" ? "skipped" : "failed";
+        const m = await sendEmail({ to: e.workEmail, ...t, kind: "reminder", organizationId: org._id });
+        const st = m.sent ? "sent" : m.queued ? "queued" : m.reason === "not_configured" ? "skipped" : "failed";
         summary.email[st]++;
-        if (m.sent) delivered = true;
+        if (m.sent || m.queued) delivered = true;
         logs.push({ organizationId: org._id, employeeId: e._id, channel: "email", to: e.workEmail, status: st, reason: m.sent ? "" : m.reason === "not_configured" ? "Email is not configured on the server" : m.reason, providerId: m.id || "", runId });
       }
     }

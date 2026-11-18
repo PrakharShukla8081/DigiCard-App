@@ -28,6 +28,7 @@ import { issueInvite } from "../../services/invites.js";
 import { audit } from "../../services/audit.js";
 import { dayKey, addDaysKey } from "../../services/time.js";
 import { groupSum } from "../../services/agg.js";
+import { getEmailMetrics, sendEmail } from "../../services/email.js";
 
 const router = Router();
 router.use(authenticate, requireRole(ROLES.SUPER_ADMIN));
@@ -524,7 +525,19 @@ router.post("/admins", async (req, res) => {
 
 /* ═════════════ Platform settings ═════════════ */
 router.get("/settings", async (_req, res) => {
-  res.json({ success: true, data: await getPlatformSettings() });
+  const [settings, emailStatus] = await Promise.all([getPlatformSettings(), getEmailMetrics()]);
+  res.json({ success: true, data: { ...settings, emailStatus } });
+});
+
+router.post("/settings/test-email", async (req, res) => {
+  const result = await sendEmail({
+    to: req.auth.email,
+    subject: "Beno Digital Card email test",
+    html: "<p>Your Beno Digital Card email provider is working.</p>",
+    text: "Your Beno Digital Card email provider is working.",
+    kind: "test",
+  });
+  res.json({ success: true, data: result });
 });
 
 router.put("/settings", async (req, res) => {

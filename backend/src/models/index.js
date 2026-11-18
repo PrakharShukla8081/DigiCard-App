@@ -423,7 +423,7 @@ const notificationLogSchema = new Schema(
     channel: { type: String, enum: ["email", "whatsapp"], required: true },
     kind: { type: String, default: "reminder" },
     to: { type: String, default: "" },
-    status: { type: String, enum: ["sent", "failed", "skipped"], required: true },
+    status: { type: String, enum: ["sent", "queued", "failed", "skipped"], required: true },
     reason: { type: String, default: "" },
     providerId: { type: String, default: "" },
     runId: { type: String, default: "" },
@@ -513,6 +513,27 @@ export async function getPlatformSettings() {
     leadRetentionDays: settings.leadRetentionDays ?? 730,
   };
 }
+
+/* ───────────────────────── Email outbox ───────────────────────── */
+const emailOutboxSchema = new Schema(
+  {
+    to: { type: String, required: true, trim: true, lowercase: true },
+    subject: { type: String, required: true, default: "" },
+    html: { type: String, default: "" },
+    text: { type: String, default: "" },
+    status: { type: String, enum: ["queued", "sent", "failed"], default: "queued", index: true },
+    attempts: { type: Number, default: 0, min: 0 },
+    lastError: { type: String, default: "" },
+    sendAfter: { type: Date, default: Date.now },
+    sentAt: { type: Date, default: null },
+    kind: { type: String, trim: true, default: "general" },
+    organizationId: { type: ObjectId, ref: "Organization", default: null },
+  },
+  ts
+);
+emailOutboxSchema.index({ status: 1, sendAfter: 1, createdAt: 1 });
+emailOutboxSchema.index({ status: 1, sentAt: 1 });
+export const EmailOutbox = model("EmailOutbox", emailOutboxSchema);
 
 /* ───────────────────────────────── Job lock ───────────────────────────── */
 const jobLockSchema = new Schema({

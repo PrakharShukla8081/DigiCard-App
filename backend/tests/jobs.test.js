@@ -43,11 +43,12 @@ test("cron trigger rejects missing and wrong secrets", async () => {
   assert.equal((await post("/api/internal/jobs/run", undefined, { "x-cron-secret": "wrong" })).status, 401);
 });
 
-test("cron trigger returns both job summaries with the correct secret", async () => {
+test("cron trigger returns reminder, subscription, and email job summaries with the correct secret", async () => {
   const result = await post("/api/internal/jobs/run", undefined, { "x-cron-secret": secret });
   assert.equal(result.status, 200);
   assert.ok(result.body.data.reminders.status);
   assert.ok(result.body.data.subscriptions.status);
+  assert.ok(result.body.data.emails.status);
   assert.equal(typeof result.body.data.durationMs, "number");
 });
 
