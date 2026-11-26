@@ -82,6 +82,8 @@ export async function runEmailJobs(now = new Date()) {
   return runQueuedEmails(now);
 }
 
+
+
 export function startScheduler() {
   setInterval(() => runJobs(["reminders", "emails"], { trigger: "timer" }).catch((e) => logger.error("reminder/email jobs failed", e)), 10 * 60_000).unref();
   setInterval(() => runJobs(["subscriptions"], { trigger: "timer" }).catch((e) => logger.error("subscription job failed", e)), 60 * 60_000).unref();
