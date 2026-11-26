@@ -8,10 +8,12 @@ import { getEntitlements, assertActive, assertFeature } from "../services/entitl
 export function signAccessToken(user) {
   return jwt.sign(
     {
+
       sub: String(user._id),
       role: user.role,
       org: user.organizationId ? String(user.organizationId) : null,
       tv: user.tokenVersion || 0,
+      
     },
     env.jwtAccessSecret,
     { expiresIn: env.accessTokenTtl, issuer: "beno-digital-card" }
